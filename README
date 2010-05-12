@@ -3,3 +3,5 @@ The project has three main compnents:
 2. an MD that does the same simulation using
     a symetry adapted ANN instead to replace the SW potential
 3. an MD that does same simulation with GPU enabled ANN
+
+testing commit capabilities on PC
