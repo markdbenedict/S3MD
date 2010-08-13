@@ -1,1 +1,5 @@
-still trying to get this configured correctly
+The project has three main compnents:
+1. an MD that Does a full N^2 Stillinger-Weber Si simulation in Python
+2. an MD that does the same simulation using
+    a symetry adapted ANN instead to replace the SW potential
+3. an MD that does same simulation with GPU enabled ANN

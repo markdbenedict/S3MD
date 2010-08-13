@@ -131,6 +131,9 @@ void runstep( int N,float * u, float * v, float * u0, float * v0, float* dens,fl
 	testVal = testOpenCL(N);
 }
 
+
+#pragma mark -
+#pragma mark Utilities
 char * load_program_source(const char *filename)
 { 
 	
@@ -152,7 +155,7 @@ char * load_program_source(const char *filename)
 
 #pragma mark -
 #pragma mark Main OpenCL Routine
-int runCL(float * a, float * b, float * results, int n)
+int runCL(float * a, float * results, int n)
 {
 	cl_program program[1];
 	cl_kernel kernel[2];
@@ -166,7 +169,7 @@ int runCL(float * a, float * b, float * results, int n)
 	size_t returned_size = 0;
 	size_t buffer_size;
 	
-	cl_mem a_mem, b_mem, ans_mem;
+	cl_mem a_mem, ans_mem;
 	
 #pragma mark Device Information
 	{
@@ -207,7 +210,8 @@ int runCL(float * a, float * b, float * results, int n)
 		// Load the program source from disk
 		// The kernel/program is the project directory and in Xcode the executable
 		// is set to launch from that directory hence we use a relative path
-		const char * filename = "/Volumes/markdbenedict/Episode_3_source/example.cl";
+		//const char * filename = "/Volumes/markdbenedict/Episode_3_source/example.cl";
+		const char * filename = "example.cl";
 		char *program_source = load_program_source(filename);
 		program[0] = clCreateProgramWithSource(context, 1, (const char**)&program_source,
 											   NULL, &err);
@@ -217,7 +221,7 @@ int runCL(float * a, float * b, float * results, int n)
 		assert(err == CL_SUCCESS);
 		
 		// Now create the kernel "objects" that we want to use in the example file 
-		kernel[0] = clCreateKernel(program[0], "add", &err);
+		kernel[0] = clCreateKernel(program[0], "set_wing_bnd", &err);
 	}
 		
 #pragma mark Memory Allocation
@@ -229,11 +233,6 @@ int runCL(float * a, float * b, float * results, int n)
 		a_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, buffer_size, NULL, NULL);
 		err = clEnqueueWriteBuffer(cmd_queue, a_mem, CL_TRUE, 0, buffer_size,
 								   (void*)a, 0, NULL, NULL);
-		
-		// Input array b
-		b_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, buffer_size, NULL, NULL);
-		err |= clEnqueueWriteBuffer(cmd_queue, b_mem, CL_TRUE, 0, buffer_size,
-									(void*)b, 0, NULL, NULL);
 		assert(err == CL_SUCCESS);
 		
 		// Results array
@@ -247,8 +246,7 @@ int runCL(float * a, float * b, float * results, int n)
 	{
 		// Now setup the arguments to our kernel
 		err  = clSetKernelArg(kernel[0],  0, sizeof(cl_mem), &a_mem);
-		err |= clSetKernelArg(kernel[0],  1, sizeof(cl_mem), &b_mem);
-		err |= clSetKernelArg(kernel[0],  2, sizeof(cl_mem), &ans_mem);
+		err |= clSetKernelArg(kernel[0],  1, sizeof(cl_mem), &ans_mem);
 		assert(err == CL_SUCCESS);
 	}
 	
@@ -273,7 +271,6 @@ int runCL(float * a, float * b, float * results, int n)
 #pragma mark Teardown
 	{
 		clReleaseMemObject(a_mem);
-		clReleaseMemObject(b_mem);
 		clReleaseMemObject(ans_mem);
 		
 		clReleaseCommandQueue(cmd_queue);
@@ -290,33 +287,37 @@ int testOpenCL(int probSize)
 	
 	// Allocate some memory and a place for the results
 	float * a = (float *)malloc(n*sizeof(float));
-	float * b = (float *)malloc(n*sizeof(float));
 	float * results = (float *)malloc(n*sizeof(float));
 	
 	// Fill in the values
 	int i=0;
 	for(i;i<n;i++){
-		a[i] = (float)i;
-		b[i] = (float)n-i;
-		results[i] = 0.f;
+		a[i] = 2*(float)i;
+		printf("%f\n",a[i]);
+		results[i] = 1.f;
 	}
 	
 	// Do the OpenCL calculation
-	runCL(a, b, results, n);
+	runCL(a, results, n);
 	int sum=0;
 	// Print out some results. For this example the values of all elements
 	// should be the same as the value of n
-	/*i=0;
+	i=0;
 	for(i;i<n;i++) 
 	{
-		printf("%f\n",results[i]);
+		printf("a=%f , results= %f\n",a[i],results[i]);
 		sum=sum+results[i];
-	}*/
+	}
 	
 	// Free up memory
 	free(a);
-	free(b);
 	free(results);
 	
 	return sum;
 }
+
+
+
+
+
+

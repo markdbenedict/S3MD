@@ -13,6 +13,7 @@ cdef extern from "solver.h":
     void dens_step ( int N,float * x, float * x0, float * u, float * v, float* b,float diff, float dt ,float vel)
     void vel_step ( int N,float * u, float * v, float * u0, float * v0, float* b,float visc, float dt ,float vel)
     void runstep( int N,float * u, float * v, float * u0, float * v0, float* diff,float* diff_prev,float* b, float visc, float dt ,float diff,float vel)
+    int testOpenCL(int probSize)
 
 DTYPE = np.float32
 DTYPE2 = np.int
@@ -20,8 +21,8 @@ DTYPE2 = np.int
 ctypedef np.float32_t DTYPE_t
 ctypedef np.int_t DTYPE2_t
 
-wing=pilutil.imread('wing.png',flatten=True)
-
+def testGPU(N):
+    testOpenCL(N)
 
 #@cython.boundscheck(False)
 def mainloop(wingImage,velocity,temperature):
