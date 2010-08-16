@@ -125,10 +125,10 @@ void vel_step( int N,float * u, float * v, float * u0, float * v0,float* boundMa
 
 void runstep( int N,float * u, float * v, float * u0, float * v0, float* dens,float* dens_prev,float* boundMask, float visc, float dt ,float diff,float vel)
 {
+	printf("starting runstep\n");
 	vel_step(N, u, v,u0,v0, boundMask, visc, dt,vel);
-     dens_step(N,dens,dens_prev,u,v, boundMask, diff, dt,vel);
-	int testVal=0;
-	testVal = testOpenCL(N);
+	dens_step(N,dens,dens_prev,u,v, boundMask, diff, dt,vel);
+	printf("finished runstep\n");
 }
 
 

@@ -6,6 +6,7 @@ Created on Jun 25, 2010
 '''
 
 import wx
+import time
 import os
 import math
 
@@ -357,16 +358,27 @@ class WindTunnelFrame(wx.Frame):
         
     def OnClickPlay(self, e):
         self.control.AppendText("Clicked on Play button\n")
+        #get a boolean representation of wing surface
         theWing=self.windTunnelPanel.GetWing()
-        result = StableFluidsCython.mainloop(theWing,self.Velocity,self.Temperature)        
-        #redraw windTunnelPanel with results
-        theImage=wx.Image(result)
-        if self.windTunnelPanel.bitmap!=None:
-            self.windTunnelPanel.bitmap.Destroy()
-        self.windTunnelPanel.bitmap=wx.BitmapFromImage(theImage)
-       
-        self.windTunnelPanel.reInitBuffer=True
-        self.Refresh()
+        
+        #run simulation
+        engine = StableFluidsCython.Engine()
+        maxIter = engine.initSim(theWing,self.Velocity,self.Temperature)
+        currIter=0
+        
+        while currIter<maxIter:
+            wx.Yield()
+            result = engine.doIterations(numIter=5,outputFreq=5)
+            currIter+=5
+            #redraw windTunnelPanel with results
+            theImage=wx.Image(result)
+            if self.windTunnelPanel.bitmap!=None:
+                self.windTunnelPanel.bitmap.Destroy()
+            self.windTunnelPanel.bitmap=wx.BitmapFromImage(theImage)
+           
+            self.windTunnelPanel.reInitBuffer=True
+            self.Refresh()
+            wx.Yield()
             
     def OnClickPause(self, e):
         self.control.AppendText("Clicked on Pause button\n")

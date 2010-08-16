@@ -20,78 +20,118 @@ DTYPE2 = np.int
 
 ctypedef np.float32_t DTYPE_t
 ctypedef np.int_t DTYPE2_t
-
-def testGPU(N):
-    testOpenCL(N)
-
-#@cython.boundscheck(False)
-def mainloop(wingImage,velocity,temperature):
+class Engine():
+    def __init__(self):
+        #self.TotalSize=1
+        #self.N=1
+        #self.NShape=(1,1)
+        ##global storage declarations
+        #self.dens_prev=np.zeros(self.TotalSize,dtype=DTYPE)
+        #self.dens=np.zeros(self.TotalSize,dtype=DTYPE)
+        #self.u_prev=np.zeros(self.TotalSize,dtype=DTYPE)
+        #self.v_prev=np.zeros(self.TotalSize,dtype=DTYPE)
+        #self.u=np.zeros(self.TotalSize,dtype=DTYPE)
+        #self.v=np.zeros(self.TotalSize,dtype=DTYPE)
+        #self.b=np.ones(self.TotalSize,dtype=DTYPE)
+        #self.wing=np.zeros(self.NShape,dtype=DTYPE)
+        #self.wingImage=np.zeros(self.NShape,dtype=DTYPE)
+        
+        #simulation environment parameters
+        self.tempFileLocation = os.getcwd()+'/temp/'
+        self.gCurrIter=0
+        self.TotalIterNeeded=0
+        #control variables sent to C code
+        self.vel=0.0
+        self.visc =0.0
+        self.diff=0.0
+        self.dt=0.0
     
-    cdef int N=wingImage.shape[0]
-    print N
-    cdef theSize=(N+2)*(N+2)
-    print theSize
-    theShape = wingImage.shape
-    theShape = (theShape[0]+2,theShape[1]+2)
+    def testGPU(N):
+        testOpenCL(N)
+        
+    def initSim(self, wingImage,velocity,temperature):
+        print 'setting up calc'
+        self.N=wingImage.shape[0]
+        self.NShape = wingImage.shape
+        self.NShape = (self.NShape[0]+2,self.NShape[1]+2)
+        self.TotalSize=(self.N+2)*(self.N+2)
+        
+        print 'TotalSize=',self.TotalSize
+        #allocate global storage
+        self.dens_prev=np.zeros(self.TotalSize,dtype=DTYPE)
+        self.dens=np.zeros(self.TotalSize,dtype=DTYPE)
+        self.u_prev=np.zeros(self.TotalSize,dtype=DTYPE)
+        self.v_prev=np.zeros(self.TotalSize,dtype=DTYPE)
+        self.u=np.zeros(self.TotalSize,dtype=DTYPE)
+        self.v=np.zeros(self.TotalSize,dtype=DTYPE)
+        self.b=np.ones(self.TotalSize,dtype=DTYPE)
+        self.wing=np.zeros(self.NShape,dtype=DTYPE)
+        self.wing[1:-1,1:-1]=wingImage[:]
+        self.wing.shape=self.TotalSize
+        self.b=self.wing.copy()
+        
+        print 'dens.shape=',self.dens.shape
+        
+        densInit=np.zeros(self.NShape,dtype=DTYPE)
+        densInit[:,5:50]=0.1
+     
+        densInit.shape=self.TotalSize
+        self.dens=densInit[:]
+        
+        self.distance = 7.0 #this is an estimate.
+        self.dt= 0.05
+        self.visc=0.000025
+        self.diff=0.0001
+        self.gCurrIter=0
+        self.vel=0.0
+        self.vel = velocity/200. / 4.0 
+        self.visc = (25.-temperature)/50.*self.visc
+        print 'velocity =',self.vel 
+        self.duration = self.distance/self.vel
+        self.dt = 0.25 * np.exp(-3*self.vel)
+        self.TotalIterNeeded = int(self.duration/self.dt)
+        
+        return self.TotalIterNeeded
+        
     
-    wing=np.zeros(theShape,dtype=DTYPE)
-    wing[1:-1,1:-1]=wingImage[:]
-    wing.shape=theSize
-    print 'starting calc'
-    densInit=np.zeros(theShape,dtype=DTYPE)
-    densInit[:,5:50]=0.1
-    
-    cdef np.ndarray[DTYPE_t,ndim=1] dens_prev=np.zeros(theSize,dtype=DTYPE)
-    cdef np.ndarray[DTYPE_t,ndim=1] dens=np.zeros(theSize,dtype=DTYPE)
- 
-    densInit.shape=theSize
-    dens=densInit[:]
-
-    uInit=np.zeros(theShape,dtype=DTYPE)
-    uInit[:,5:10]=0.1
-    uInit.shape=theSize
-    
-    #np.asarray(0.03*(np.random.random(theSize)-0.5)+0.02,dtype=np.float32)
-    cdef np.ndarray[DTYPE_t,ndim=1] u_prev=np.zeros(theSize,dtype=DTYPE)
-    cdef np.ndarray[DTYPE_t,ndim=1] v_prev=np.zeros(theSize,dtype=DTYPE)
-    cdef np.ndarray[DTYPE_t,ndim=1] u=np.zeros(theSize,dtype=DTYPE)
-    cdef np.ndarray[DTYPE_t,ndim=1] v=np.zeros(theSize,dtype=DTYPE)
-    cdef np.ndarray[DTYPE_t,ndim=1] b=np.ones(theSize,dtype=DTYPE)
-    
-    b=wing.copy()
-    u=uInit[:]
-    distance = 7.0 #this is an estimate.
-    cdef float dt= 0.05
-    cdef float visc=0.000025
-    cdef float diff=0.0001
-    cdef int i=0
-    velocity = velocity/200. / 4.0 
-    visc = (25.-temperature)/50.*visc
-    duration = distance/velocity
-    dt = 0.25 * np.exp(-3*velocity)
-    numIter = duration/dt
-    
-    print 'numIterTotal = ',numIter
-    print 'time =', duration
-    print 'dt=',dt
-    print 'visc=',visc
-    print 'velocity=',velocity
-    tempFileLocation = os.getcwd()+'/temp/'
-    while (i < numIter):
-        i+=1
-        runstep(N, <DTYPE_t*> u.data, <DTYPE_t*> v.data,<DTYPE_t*> u_prev.data,<DTYPE_t*> v_prev.data,
-                <DTYPE_t*> dens.data,<DTYPE_t*> dens_prev.data,<DTYPE_t*> b.data, visc, dt,diff,velocity)
-        if i%3==0:
-            #draw output
-            print 'i=',i
-            tempDens=dens.copy()
-            tempDens.shape=theShape
-            matplotlib.pyplot.imsave(tempFileLocation+'DensityImage'+str(i)+'.png',tempDens)
-            tempDens=np.sqrt(u*u+v*v)
-            tempDens.shape=theShape
-            matplotlib.pyplot.imsave(tempFileLocation+'VelocityImage'+str(i)+'.png',tempDens)
-    
-    tempDens=dens.copy()
-    tempDens.shape=theShape
-    matplotlib.pyplot.imsave(tempFileLocation+'FinalImage'+'.png',tempDens)
-    return tempFileLocation+'FinalImage'+'.png'
+    #@cython.boundscheck(False)
+    def doIterations(self,numIter=1,outputFreq=5):
+        
+        #setup local buffers
+        cdef np.ndarray[DTYPE_t,ndim=1] _u_prev = self.u_prev
+        cdef np.ndarray[DTYPE_t,ndim=1] _v_prev= self.v_prev
+        cdef np.ndarray[DTYPE_t,ndim=1] _u=self.u 
+        cdef np.ndarray[DTYPE_t,ndim=1] _v=self.v 
+        cdef np.ndarray[DTYPE_t,ndim=1] _b=self.b
+        cdef np.ndarray[DTYPE_t,ndim=1] _dens_prev=self.dens_prev
+        cdef np.ndarray[DTYPE_t,ndim=1] _dens=self.dens
+        
+        cdef int currIter = int(self.gCurrIter)
+        
+        i=0
+        while (i <= numIter):
+            i=i+1
+            print 'current iteration=',currIter
+            runstep(self.N, <DTYPE_t*> _u.data, <DTYPE_t*> _v.data,<DTYPE_t*> _u_prev.data,<DTYPE_t*> _v_prev.data,
+                    <DTYPE_t*> _dens.data,<DTYPE_t*> _dens_prev.data,<DTYPE_t*> _b.data, self.visc, self.dt,self.diff,self.vel)
+            currIter=currIter+1
+            if i%outputFreq==0:
+                #draw output
+                print 'current iteration=',currIter
+                tempDens=self.dens.copy()
+                tempDens.shape=self.NShape
+                print 'filename='+self.tempFileLocation+'DensityImage'+str(currIter)+'.png'
+                print 'tempDens.shape=',tempDens.shape
+                matplotlib.pyplot.imsave(self.tempFileLocation+'DensityImage'+str(currIter)+'.png',tempDens)
+                
+                tempDens=np.sqrt(self.u*self.u+self.v*self.v)
+                tempDens.shape=self.NShape
+                print 'tempDens.shape=',tempDens.shape
+                print 'tempDens.max()=',tempDens.max()
+                matplotlib.pyplot.imsave(self.tempFileLocation+'VelocityImage'+str(currIter)+'.png',tempDens)
+        
+        tempDens=self.dens.copy()
+        tempDens.shape=self.NShape
+        matplotlib.pyplot.imsave(self.tempFileLocation+'FinalImage'+'.png',tempDens)
+        self.gCurrIter=currIter
+        return self.tempFileLocation+'FinalImage'+'.png'
