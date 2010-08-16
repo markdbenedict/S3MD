@@ -13,7 +13,7 @@ cdef extern from "solver.h":
     void dens_step ( int N,float * x, float * x0, float * u, float * v, float* b,float diff, float dt ,float vel)
     void vel_step ( int N,float * u, float * v, float * u0, float * v0, float* b,float visc, float dt ,float vel)
     void runstep( int N,float * u, float * v, float * u0, float * v0, float* diff,float* diff_prev,float* b, float visc, float dt ,float diff,float vel)
-    int testOpenCL(int probSize)
+    #int testOpenCL(int probSize)
 
 DTYPE = np.float32
 DTYPE2 = np.int
@@ -22,19 +22,6 @@ ctypedef np.float32_t DTYPE_t
 ctypedef np.int_t DTYPE2_t
 class Engine():
     def __init__(self):
-        #self.TotalSize=1
-        #self.N=1
-        #self.NShape=(1,1)
-        ##global storage declarations
-        #self.dens_prev=np.zeros(self.TotalSize,dtype=DTYPE)
-        #self.dens=np.zeros(self.TotalSize,dtype=DTYPE)
-        #self.u_prev=np.zeros(self.TotalSize,dtype=DTYPE)
-        #self.v_prev=np.zeros(self.TotalSize,dtype=DTYPE)
-        #self.u=np.zeros(self.TotalSize,dtype=DTYPE)
-        #self.v=np.zeros(self.TotalSize,dtype=DTYPE)
-        #self.b=np.ones(self.TotalSize,dtype=DTYPE)
-        #self.wing=np.zeros(self.NShape,dtype=DTYPE)
-        #self.wingImage=np.zeros(self.NShape,dtype=DTYPE)
         
         #simulation environment parameters
         self.tempFileLocation = os.getcwd()+'/temp/'
@@ -47,7 +34,8 @@ class Engine():
         self.dt=0.0
     
     def testGPU(N):
-        testOpenCL(N)
+        #testOpenCL(N)
+        return
         
     def initSim(self, wingImage,velocity,temperature):
         print 'setting up calc'
@@ -69,9 +57,7 @@ class Engine():
         self.wing[1:-1,1:-1]=wingImage[:]
         self.wing.shape=self.TotalSize
         self.b=self.wing.copy()
-        
-        print 'dens.shape=',self.dens.shape
-        
+                
         densInit=np.zeros(self.NShape,dtype=DTYPE)
         densInit[:,5:50]=0.1
      
@@ -86,7 +72,6 @@ class Engine():
         self.vel=0.0
         self.vel = velocity/200. / 4.0 
         self.visc = (25.-temperature)/50.*self.visc
-        print 'velocity =',self.vel 
         self.duration = self.distance/self.vel
         self.dt = 0.25 * np.exp(-3*self.vel)
         self.TotalIterNeeded = int(self.duration/self.dt)
@@ -116,18 +101,14 @@ class Engine():
                     <DTYPE_t*> _dens.data,<DTYPE_t*> _dens_prev.data,<DTYPE_t*> _b.data, self.visc, self.dt,self.diff,self.vel)
             currIter=currIter+1
             if i%outputFreq==0:
-                #draw output
                 print 'current iteration=',currIter
+                #draw output
                 tempDens=self.dens.copy()
                 tempDens.shape=self.NShape
-                print 'filename='+self.tempFileLocation+'DensityImage'+str(currIter)+'.png'
-                print 'tempDens.shape=',tempDens.shape
                 matplotlib.pyplot.imsave(self.tempFileLocation+'DensityImage'+str(currIter)+'.png',tempDens)
                 
                 tempDens=np.sqrt(self.u*self.u+self.v*self.v)
                 tempDens.shape=self.NShape
-                print 'tempDens.shape=',tempDens.shape
-                print 'tempDens.max()=',tempDens.max()
                 matplotlib.pyplot.imsave(self.tempFileLocation+'VelocityImage'+str(currIter)+'.png',tempDens)
         
         tempDens=self.dens.copy()

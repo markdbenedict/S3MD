@@ -172,12 +172,57 @@ class BezierPanel(wx.Panel):
 
 import StableFluidsCython
 
+# Define notification event for thread completion
+EVT_RESULT_ID = wx.NewId()
+
+class ResultEvent(wx.PyEvent):
+    """Simple event to carry arbitrary result data."""
+    def __init__(self, data):
+        """Init Result Event."""
+        wx.PyEvent.__init__(self)
+        self.SetEventType(EVT_RESULT_ID)
+        self.data = data
+
+from threading import Thread
+class SimulationWorker(Thread):
+    """Worker Thread Class."""
+    def __init__(self, notify_window,wingShape,velocity,temperature):
+        """Init Worker Thread Class."""
+        Thread.__init__(self)
+        self._notify_window = notify_window
+        self._want_abort = False
+        self.wing = wingShape
+        self.vel=velocity
+        self.tempr=temperature
+        self.engine = StableFluidsCython.Engine()
+        self.maxIter = self.engine.initSim(self.wing,self.vel,self.tempr)
+        self.currIter=0
+       
+    def run(self):
+        """Run Worker Thread."""
+        while self.currIter < self.maxIter :
+            if self._want_abort==True:
+                print 'asked to abort processing'
+                return
+            numToDo=5
+            result = self.engine.doIterations(numIter=numToDo,outputFreq=numToDo)
+            self.currIter+=numToDo
+            wx.PostEvent(self._notify_window, ResultEvent(result))
+
+    def abort(self):
+        """abort worker thread."""
+        # Method for use by main thread to signal an abort
+        self._want_abort = True
+
 class WindTunnelFrame(wx.Frame):
     def __init__(self, parent, title):
         wx.Frame.__init__(self, parent, title=title, size=(450, 700))
         self.control = wx.TextCtrl(self, style = wx.TE_MULTILINE,size=(450,65))
         self.control.SetBackgroundColour(wx.GREEN)
         
+        self.simulationWorker=None
+         # Set up event handler for any worker thread results
+        self.Connect(-1, -1, EVT_RESULT_ID, self.OnResult)
         self.Temperature=0
         self.Velocity=0
         
@@ -237,10 +282,10 @@ class WindTunnelFrame(wx.Frame):
         
         
         ###put in buttons    
-        self.playbutton = wx.Button(self.controlPanel, label = "Play")
+        self.playbutton = wx.Button(self.controlPanel, label = "StartSim")
         self.Bind(wx.EVT_BUTTON, self.OnClickPlay, self.playbutton)
         
-        self.pausebutton = wx.Button(self.controlPanel, label = "Pause")
+        self.pausebutton = wx.Button(self.controlPanel, label = "StopSim")
         self.Bind(wx.EVT_BUTTON, self.OnClickPause, self.pausebutton)
         
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -361,29 +406,18 @@ class WindTunnelFrame(wx.Frame):
         #get a boolean representation of wing surface
         theWing=self.windTunnelPanel.GetWing()
         
-        #run simulation
-        engine = StableFluidsCython.Engine()
-        maxIter = engine.initSim(theWing,self.Velocity,self.Temperature)
-        currIter=0
-        
-        while currIter<maxIter:
-            wx.Yield()
-            result = engine.doIterations(numIter=5,outputFreq=5)
-            currIter+=5
-            #redraw windTunnelPanel with results
-            theImage=wx.Image(result)
-            if self.windTunnelPanel.bitmap!=None:
-                self.windTunnelPanel.bitmap.Destroy()
-            self.windTunnelPanel.bitmap=wx.BitmapFromImage(theImage)
-           
-            self.windTunnelPanel.reInitBuffer=True
-            self.Refresh()
-            wx.Yield()
+        #run simulation in seperate thread
+        if self.simulationWorker!=None:
+            del self.simulationWorker
+            
+        self.simulationWorker = SimulationWorker(self,theWing,self.Velocity,self.Temperature)
+        self.simulationWorker.start()
             
     def OnClickPause(self, e):
         self.control.AppendText("Clicked on Pause button\n")
-        self.controlPanel.SetBackgroundColour("GRAY")     
-    
+        self.controlPanel.SetBackgroundColour("GRAY")
+        if self.simulationWorker!=None:
+            self.simulationWorker.abort()    
         
     def OnSlideVelocity(self, e):
         
@@ -394,7 +428,19 @@ class WindTunnelFrame(wx.Frame):
     def OnSlideTemp(self, e):
         self.control.AppendText("Temperature Slider was moved %d\n" %e.GetInt())
         self.Temperature = e.GetInt()
-    ###
+    
+    def OnResult(self,event):
+        if event.data != None:
+            theImage=wx.Image(event.data)
+            if self.windTunnelPanel.bitmap!=None:
+                self.windTunnelPanel.bitmap.Destroy()
+            self.windTunnelPanel.bitmap=wx.BitmapFromImage(theImage)
+            self.windTunnelPanel.reInitBuffer=True
+            self.Refresh()
+            wx.Yield()
+        
+
+
 
    
 app = wx.App(False)

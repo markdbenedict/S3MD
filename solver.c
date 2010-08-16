@@ -2,7 +2,7 @@
 #define SWAP(x0,x) {float * tmp=x0;x0=x;x=tmp;}
 #define FOR_EACH_CELL for ( i=1 ; i<=N ; i++ ) { for ( j=1 ; j<=N ; j++ ) {
 #define END_FOR }}
-
+ 
 #include <stdio.h>
 #include <assert.h>
 #include <sys/sysctl.h>
@@ -125,13 +125,11 @@ void vel_step( int N,float * u, float * v, float * u0, float * v0,float* boundMa
 
 void runstep( int N,float * u, float * v, float * u0, float * v0, float* dens,float* dens_prev,float* boundMask, float visc, float dt ,float diff,float vel)
 {
-	printf("starting runstep\n");
 	vel_step(N, u, v,u0,v0, boundMask, visc, dt,vel);
 	dens_step(N,dens,dens_prev,u,v, boundMask, diff, dt,vel);
-	printf("finished runstep\n");
 }
 
-
+/*
 #pragma mark -
 #pragma mark Utilities
 char * load_program_source(const char *filename)
@@ -315,7 +313,7 @@ int testOpenCL(int probSize)
 	
 	return sum;
 }
-
+ */
 
 
 
