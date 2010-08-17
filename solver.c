@@ -129,26 +129,41 @@ void runstep( int N,float * u, float * v, float * u0, float * v0, float* dens,fl
 	dens_step(N,dens,dens_prev,u,v, boundMask, diff, dt,vel);
 }
 
-/*
+
 #pragma mark -
 #pragma mark Utilities
-char * load_program_source(const char *filename)
-{ 
+int load_program_source(const char *inFileName, char** data)
+{
+	FILE* input;
+	long  lFileLen;               /* Length of file */
 	
-	struct stat statbuf;
-	FILE *fh; 
-	char *source; 
+	input = fopen(inFileName,"r");
+	if(input!=NULL){
+		fseek(input, 0L, SEEK_END);  /* Position to end of file */
+		lFileLen = ftell(input);     /* Get file length */
+		rewind(input);               /* Back to start of file */
+		(*data) = calloc(lFileLen + 2, sizeof(char));
+		int val = lFileLen + 1;
+		printf("file length =%d\n",val);
+		if((*data) == NULL )
+		{
+		  printf("\nInsufficient memory to read file.\n");
+		  return 0;
+		}
+		
+		fread((*data), lFileLen, 1, input); /* Read the entire file into data */
+		fclose(input);
+		(*data)[lFileLen]='\n';
+		(*data)[lFileLen+1]='\0';
+		return 1;
+	}
+	else
+	{
+		printf("could not open %s ",inFileName);
+		return 0;
+	}
 	
-	fh = fopen(filename, "r");
-	if (fh == 0)
-		return 0; 
-	
-	stat(filename, &statbuf);
-	source = (char *) malloc(statbuf.st_size + 1);
-	fread(source, statbuf.st_size, 1, fh);
-	source[statbuf.st_size] = '\0'; 
-	
-	return source; 
+
 } 
 
 #pragma mark -
@@ -206,11 +221,24 @@ int runCL(float * a, float * results, int n)
 #pragma mark Program and Kernel Creation
 	{
 		// Load the program source from disk
-		// The kernel/program is the project directory and in Xcode the executable
-		// is set to launch from that directory hence we use a relative path
-		//const char * filename = "/Volumes/markdbenedict/Episode_3_source/example.cl";
 		const char * filename = "example.cl";
-		char *program_source = load_program_source(filename);
+		
+		const char *program_source2 = "__kernel void set_wing_bnd ( __global float* boundMask,__global float * x){int gid = get_global_id(0);\nif (boundMask[gid]<10.0)\n{\nx[gid]=boundMask[gid];\n}\n}\n\n";
+	
+		FILE* input;
+		long  lFileLen;
+		input = fopen(filename,"r");
+		fseek(input, 0L, SEEK_END);  /* Position to end of file */
+		lFileLen = ftell(input);     /* Get file length */
+		rewind(input);               /* Back to start of file */
+		char *program_source = calloc(lFileLen + 2, sizeof(char));
+		fread(program_source, lFileLen, 1, input); /* Read the entire file into data */
+		fclose(input);
+		program_source[lFileLen]='\n';
+		program_source[lFileLen+1]='\0';
+		
+		//load_program_source(filename,program_source);
+		printf("file text from inside opencl routine is:\n%s\n",program_source);
 		program[0] = clCreateProgramWithSource(context, 1, (const char**)&program_source,
 											   NULL, &err);
 		assert(err == CL_SUCCESS);
@@ -277,6 +305,8 @@ int runCL(float * a, float * results, int n)
 	return CL_SUCCESS;
 }
 
+
+
 int testOpenCL(int probSize)
 {
 	
@@ -291,11 +321,17 @@ int testOpenCL(int probSize)
 	int i=0;
 	for(i;i<n;i++){
 		a[i] = 2*(float)i;
-		printf("%f\n",a[i]);
 		results[i] = 1.f;
+		printf("a=%f,input=%f\n",a[i],results[i]);
+		
 	}
 	
 	// Do the OpenCL calculation
+	//const char * filename = "example.cl";
+	//char *program_source;
+	//load_program_source(filename,&program_source);
+	//printf("file text from outside  openCL routine is:\n %s\n",program_source);
+	
 	runCL(a, results, n);
 	int sum=0;
 	// Print out some results. For this example the values of all elements
@@ -313,7 +349,7 @@ int testOpenCL(int probSize)
 	
 	return sum;
 }
- */
+ 
 
 
 
