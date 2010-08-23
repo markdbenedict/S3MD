@@ -1,17 +1,4 @@
 
-/* [[pr_04_3 - RDF, soft spheres]] */
-
-
-/*********************************************************************
-
-  (C) 2004  D. C. Rapaport
-
-  This software is copyright material accompanying the book
-  "The Art of Molecular Dynamics Simulation", 2nd edition,
-  by D. C. Rapaport, published by Cambridge University Press (2004).
-
-**********************************************************************/
-
 
 #include "in_mddefs.h"
 
@@ -199,7 +186,6 @@ void ComputeForces ()
     }
   }
 }
-
 
 void LeapfrogStep (int part)
 {
