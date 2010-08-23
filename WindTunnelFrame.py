@@ -111,8 +111,8 @@ class BarPanel (wx.Panel):
         self.SetColor( color )
 
         self._SetSize()
-        self.speedup1=[1.]
-        self.speedup2=[1.]
+        self.speedup1=[1.,1.,1.,1.,1.,1.,1.] #used for rolling average
+        self.speedup2=[1.,1.,1.,1.,1.,1.,1.]
         self._resizeflag = False
 
         self.Bind(wx.EVT_IDLE, self._onIdle)
@@ -151,8 +151,9 @@ class BarPanel (wx.Panel):
         
         val1=tempVals[1]/float(tempVals[0])
         val2=tempVals[2]/float(tempVals[0])
-        
+        del self.speedup1[0]
         self.speedup1.append(val1)   
+        del self.speedup1[0]
         self.speedup2.append(val2)
     
     def draw(self):
@@ -164,7 +165,7 @@ class BarPanel (wx.Panel):
         self.axes.set_xticklabels([])
         self.axes.set_yticklabels([])
         self.axes.set_title('Speedup Relative to Base')
-        self.axes.text(1.3,0.5,str(1x))
+        self.axes.text(1.3,0.5,'1x')
         speedStr1 = '%.1fx'%mean(self.speedup1)
         speedStr2 = '%.1fx'%mean(self.speedup2)
         self.axes.text(2.15,mean(self.speedup1)/2.0,speedStr1)
