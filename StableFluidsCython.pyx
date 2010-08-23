@@ -13,7 +13,8 @@ cdef extern from "solver.h":
     void dens_step ( int N,float * x, float * x0, float * u, float * v, float* b,float diff, float dt ,float vel)
     void vel_step ( int N,float * u, float * v, float * u0, float * v0, float* b,float visc, float dt ,float vel)
     void runstep( int N,float * u, float * v, float * u0, float * v0, float* diff,float* diff_prev,float* b, float visc, float dt ,float diff,float vel)
-    int testOpenCL(int probSize)
+    void testCUDA()
+    #int testOpenCL(int probSize)
 
 DTYPE = np.float32
 DTYPE2 = np.int
@@ -34,7 +35,7 @@ class Engine():
         self.dt=0.0
     
     def testGPU(self,N):
-        testOpenCL(N)
+        testCUDA()
         return
         
     def initSim(self, wingImage,velocity,temperature):

@@ -7,7 +7,10 @@ import numpy
 
 sourcefiles = ['StableFluidsCython.pyx','solver.c']
 ext_modules = [Extension('StableFluidsCython',sourcefiles,
-        include_dirs = [numpy.get_include(),'.'])]
+        include_dirs = [numpy.get_include(),'.'],
+        library_dirs=['.'],
+        libraries=[],
+        extra_objects=[])]
 
 setup(
   name = "StableFluidsCython",

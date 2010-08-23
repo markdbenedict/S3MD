@@ -2,229 +2,210 @@
 Created on Jun 25, 2010
 
 
-@author: sarahjackson
+@author: MarkDBenedict
 '''
+import matplotlib
+matplotlib.use('WXAgg')
+#import matplotlib.pyplot as plt
+
+from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 import wx
 import time
 import os
 import math
-
+import subprocess
 import scipy.misc.pilutil as pilutil
 import Image #PIL image library
-
-class BezierPanel(wx.Panel):
-    
-    def __init__(self, parent, inBitmap = None):
-        wx.Panel.__init__(self, parent, size = parent.GetClientSize(), 
-                          style=wx.NO_FULL_REPAINT_ON_RESIZE)
-        self.bitmap = inBitmap
-        self.reInitBuffer = True
-        self.initBuffer()
-        self.initDrawing()
-        self.bindEvents()
-    
-    def setBitmap(self, inBitmap):
-        self.bitmap = inBitmap
-        dc = wx.BufferedDC(None, self.drawBuffer)
-        if self.bitmap != None: #use bitmap as background of panel
-            dc.DrawBitmap(self.bitmap, 0, 0)
-            self.drawPoints(dc,self.points)
-        self.Refresh(True)    
+from numpy import *
 
 
-    def initDrawing(self):
-        self.points = [(75, 225), (175, 185), (275, 185), (375, 215), 
-                       (375, 235), (275, 265), (175, 265)]
+class PlotPanel (wx.Panel):
+    """The PlotPanel has a Figure and a Canvas. OnSize events simply set a 
+flag, and the actual resizing of the figure is triggered by an Idle event."""
+    def __init__( self, parent, color=None, dpi=None, **kwargs ):
+        from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
+        from matplotlib.figure import Figure
+        self.parent=parent
+        wx.Panel.__init__( self, parent, **kwargs )
 
-        self.PointSize=4
-        dc = wx.BufferedDC(wx.ClientDC(self), self.drawBuffer)
-        dc.BeginDrawing()
-        self.drawPoints(dc, self.points)
-        dc.EndDrawing()
-        self.currentPoint=None
-    
-    def initBuffer(self):
-        self.reInitBuffer=False
-        self.SetBackgroundColour("WHITE")
-        parent = self.GetParent()
-        psize = parent.GetClientSize()
-        self.SetSize(psize)
+        # initialize matplotlib stuf
         
-#        print 'init memory buffer to ', psize.width, ",", psize.height
-        self.drawBuffer = wx.EmptyBitmap(psize.width, psize.height)
-        dc=wx.BufferedDC(None, self.drawBuffer)
-        
-        if self.bitmap != None: #use bitmap as background of panel
-            dc.DrawBitmap(self.bitmap, 0, 0)
-            self.drawPoints(dc,self.points)
-        else:  #use background color to clear panel
-            dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
-            dc.Clear()
-        return
-    
-    def bindEvents(self): 
-        self.Bind(wx.EVT_LEFT_DOWN, self.onLeftDown)
-        self.Bind(wx.EVT_LEFT_UP, self.onLeftUp)
-        self.Bind(wx.EVT_MOTION, self.onMotion)
-        self.Bind(wx.EVT_PAINT, self.onPaint)
-        self.Bind(wx.EVT_IDLE, self.onIdle)
-        return
+        self.figure = Figure( None, dpi )
+        self.axes = self.figure.add_subplot(111)
+        self.canvas = FigureCanvas(self, -1, self.figure)
+        self.SetColor( color )
 
-    def drawPoints(self, dc, points,drawControlPoints=True):
-        pen = wx.Pen(wx.NamedColour("PURPLE"), 1, wx.SOLID)
-        brush = wx.Brush(wx.NamedColour("PURPLE"))
-        dc.SetPen(pen)
-        dc.SetBrush(brush)
-        
-        if drawControlPoints:
-            for point in points:
-                dc.DrawCircle(point[0], point[1], self.PointSize)
-            
-        pen2 = wx.Pen(wx.NamedColour("BLACK"), 2, wx.SOLID)
-        dc.SetPen(pen2)
-        brush2 = wx.Brush(wx.NamedColour("BLACK"))
-        brush2.SetStyle(wx.SOLID)        
-        dc.SetBrush(brush2) 
-        
-        tempList=self.points[:]
-        tempList.append(self.points[0])
-        dc.DrawSpline(tempList)
-#        dc.FloodFillPoint(self.points[0], "PURPLE", wx.FLOOD_BORDER)
+        self._SetSize()
+        self.x=[]
+        self.y=[]
+        #self.draw()
 
-    def GetWing(self):
-        dc=wx.BufferedPaintDC(self, self.drawBuffer)
-        dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
-        dc.Clear()
-        self.drawPoints(dc,self.points,False)
-        theImage = self.drawBuffer.ConvertToImage()
-        pil = Image.new('RGB', (theImage.GetWidth(), theImage.GetHeight()))
-        pil.fromstring(theImage.GetData())
-        theImageArray = pilutil.fromimage(pil,flatten=True)
-        return theImageArray
-        
-        
-#Event Handlers
-    #identify selected point
-    def onLeftDown(self, event):
-        pos = event.GetPositionTuple()
-        for i, point in enumerate(self.points):
-            r = math.sqrt((pos[0]-point[0])**2+(pos[1]-point[1])**2)
-            if r < self.PointSize:  #cursor selected this point
-                self.currentPoint = i
-#                print i
-        self.CaptureMouse()
-        return
-    
-    
-    def onLeftUp(self, event):
-        self.currentPoint = None
-        if self.HasCapture():
-            self.ReleaseMouse()
-            dc = wx.BufferedDC(wx.ClientDC(self), self.drawBuffer)
-            if self.bitmap != None: #use bitmap as background of panel
-                dc.DrawBitmap(self.bitmap, 0, 0)
-            else:  #use background color to clear panel
-                dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
-                dc.Clear()
-            self.drawPoints(dc, self.points)
-            dc.EndDrawing()
-        return
-    
-    #move the pos tuple of current point
-    def onMotion(self, event):
-        if event.Dragging() and event.LeftIsDown() and self.currentPoint != None:   
-            dc = wx.BufferedDC(wx.ClientDC(self), self.drawBuffer)
-            pos = event.GetPositionTuple()
-            oldPos = self.points[self.currentPoint] 
-            pen = wx.Pen(wx.NamedColour("White"), 1, wx.SOLID)
-            brush = wx.Brush(wx.NamedColour("White"))
-            dc.SetPen(pen)
-            dc.SetBrush(brush)
-            self.points[self.currentPoint] = pos
-            
-            if self.bitmap != None: #use bitmap as background of panel
-                dc.DrawBitmap(self.bitmap, 0, 0)
-                self.drawPoints(dc, self.points)
-            else:  #use background color to clear panel
-                dc.DrawCircle(oldPos[0], oldPos[1], self.PointSize)#clear old point
-                self.drawPoints(dc, [pos])
-        return
+        self._resizeflag = False
 
-    def onPaint(self,event):
-        dc=wx.BufferedPaintDC(self, self.drawBuffer)
-        
-    def onIdle(self,event):
-        if self.reInitBuffer: #panel was resized
-            self.initBuffer()
-            self.reInitBuffer = False
-            self.Refresh(False)
-            
-    def onExit(self,event):
-        return
+        self.Bind(wx.EVT_IDLE, self._onIdle)
+        self.Bind(wx.EVT_SIZE, self._onSize)
 
-    def onSize(self,event):
+    def SetColor( self, rgbtuple=None ):
+        """Set figure and canvas colours to be the same."""
+        if rgbtuple is None:
+            rgbtuple = wx.SystemSettings.GetColour( wx.SYS_COLOUR_BTNFACE ).Get()
+        clr = [c/255. for c in rgbtuple]
+        self.figure.set_facecolor( clr )
+        self.figure.set_edgecolor( clr )
+        self.canvas.SetBackgroundColour( wx.Colour( *rgbtuple ) )
+
+    def _onSize( self, event ):
+        self._resizeflag = True
         print 'told to resize'
-        self.reInitBuffer = True
-        return
+        self._SetSize()
 
+    def _onIdle( self, evt ):
+        if self._resizeflag:
+            self._resizeflag = False
+            print 'told to resize'
+            self._SetSize()
 
+    def _SetSize( self ):
+        pixels = self.GetClientSize() #tuple( self.parent.GetClientSize() )
+        self.SetSize( pixels )
+        self.canvas.SetSize( pixels )
+        self.figure.set_size_inches( float( pixels[0] )/self.figure.get_dpi(),
+                                     float( pixels[1] )/self.figure.get_dpi() )
 
-import StableFluidsCython
+    def draw(self):
+       
+        if self.x != None and self.y !=None:
+            self.figure.subplots_adjust(left=0.125)
+            self.axes.plot(self.x[0][1:],self.y[0][1:], 'rv',linestyle='--',linewidth=4.0)
+            self.axes.plot(self.x[1][1:],self.y[1][1:], 'bo',linestyle=':',linewidth=2.0)
+            self.axes.plot(self.x[2][1:],self.y[2][1:], 'g.',linestyle='-',linewidth=1.0)
+            self.axes.legend(('Base','ANN','ANN-GPU'),loc=2,fancybox=True)
+            self.axes.set_xlabel('Timestep')
+            self.axes.set_ylabel=('Pressure')
+            ticks=[0.999*self.y[2].max(),self.y[2].max(),1.001*self.y[2].max()]
+            self.axes.set_ylim((ticks[0],ticks[2]))
+            strLabels=['%.3f'%(0.999*ticks[0]),
+                       '%.3f'%ticks[1],
+                       '%.3f'%(1.001*ticks[2])]
+            self.axes.set_yticklabels(strLabels)
+            self.axes.set_yticks(ticks)
+            print ticks
+            self.canvas.draw()
+            
+class BarPanel (wx.Panel):
+    """The BarPanel has a Figure and a Canvas. OnSize events simply set a flag,
+    and the actual resizing of the figure is triggered by an Idle event."""
+    def __init__( self, parent, color=None, dpi=None, **kwargs ):
+        from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
+        from matplotlib.figure import Figure
+        self.parent=parent
+        wx.Panel.__init__( self, parent, **kwargs )
 
-# Define notification event for thread completion
-EVT_RESULT_ID = wx.NewId()
+        # initialize matplotlib stuf
+        
+        self.figure = Figure( None, dpi )
+        self.axes = self.figure.add_subplot(111)
+        self.canvas = FigureCanvas(self, -1, self.figure)
+        self.SetColor( color )
 
-class ResultEvent(wx.PyEvent):
-    """Simple event to carry arbitrary result data."""
-    def __init__(self, data):
-        """Init Result Event."""
-        wx.PyEvent.__init__(self)
-        self.SetEventType(EVT_RESULT_ID)
-        self.data = data
+        self._SetSize()
+        self.speedup1=[1.]
+        self.speedup2=[1.]
+        self._resizeflag = False
 
+        self.Bind(wx.EVT_IDLE, self._onIdle)
+        self.Bind(wx.EVT_SIZE, self._onSize)
+
+    def SetColor( self, rgbtuple=None ):
+        """Set figure and canvas colours to be the same."""
+        if rgbtuple is None:
+            rgbtuple = wx.SystemSettings.GetColour( wx.SYS_COLOUR_BTNFACE ).Get()
+        clr = [c/255. for c in rgbtuple]
+        self.figure.set_facecolor( clr )
+        self.figure.set_edgecolor( clr )
+        self.canvas.SetBackgroundColour( wx.Colour( *rgbtuple ) )
+
+    def _onSize( self, event ):
+        self._resizeflag = True
+        print 'told to resize'
+        self._SetSize()
+
+    def _onIdle( self, evt ):
+        if self._resizeflag:
+            self._resizeflag = False
+            print 'told to resize'
+            self._SetSize()
+
+    def _SetSize( self ):
+        pixels = self.GetClientSize() #tuple( self.parent.GetClientSize() )
+        self.SetSize( pixels )
+        self.canvas.SetSize( pixels )
+        self.figure.set_size_inches( float( pixels[0] )/self.figure.get_dpi(),
+                                     float( pixels[1] )/self.figure.get_dpi() )
+    def setData(self,inValList):
+        tempVals=inValList
+        if tempVals[0]==0:
+            tempVals[0]=1
+        
+        val1=tempVals[1]/float(tempVals[0])
+        val2=tempVals[2]/float(tempVals[0])
+        
+        self.speedup1.append(val1)   
+        self.speedup2.append(val2)
+    
+    def draw(self):
+        self.axes.clear()
+        self.figure.subplots_adjust(top=0.83)
+        self.axes.bar([1,2,3],[1.0,mean(self.speedup1),mean(self.speedup2)],color=['r','b','g'])
+        self.axes.set_xticks([])
+        self.axes.set_yticks([])
+        self.axes.set_xticklabels([])
+        self.axes.set_yticklabels([])
+        self.axes.set_title('Speedup Relative to Base')
+        self.axes.text(1.3,0.5,str(1x))
+        speedStr1 = '%.1fx'%mean(self.speedup1)
+        speedStr2 = '%.1fx'%mean(self.speedup2)
+        self.axes.text(2.15,mean(self.speedup1)/2.0,speedStr1)
+        self.axes.text(3.15,mean(self.speedup2)/2.0,speedStr2)
+        self.canvas.draw()
+   
 from threading import Thread
 class SimulationWorker(Thread):
     """Worker Thread Class."""
-    def __init__(self, notify_window,wingShape,velocity,temperature):
+    def __init__(self, notify_window,processNum):
         """Init Worker Thread Class."""
         Thread.__init__(self)
-        self._notify_window = notify_window
-        self._want_abort = False
-        self.wing = wingShape
-        self.vel=velocity
-        self.tempr=temperature
-        self.engine = StableFluidsCython.Engine()
-        self.maxIter = self.engine.initSim(self.wing,self.vel,self.tempr)
-        self.currIter=0
+        self.processNum = processNum
        
     def run(self):
         """Run Worker Thread."""
-        while self.currIter < self.maxIter :
-            if self._want_abort==True:
-                print 'asked to abort processing'
-                return
-            numToDo=5
-            result = self.engine.doIterations(numIter=numToDo,outputFreq=numToDo)
-            self.currIter+=numToDo
-            wx.PostEvent(self._notify_window, ResultEvent(result))
+        inputName='./mdcode/process%d'%self.processNum
+        fileName='./mdcode/testData%d.txt'%self.processNum
+        exeName='./mdcode/testMD%d'%self.processNum
+        fileptr=open(fileName,'w')
+        
+        self.p=subprocess.Popen([exeName,inputName],executable=exeName,stdout=fileptr)
 
     def abort(self):
         """abort worker thread."""
         # Method for use by main thread to signal an abort
-        self._want_abort = True
+        if hasattr(self,'p'):
+            self.p.kill()
 
 class WindTunnelFrame(wx.Frame):
     def __init__(self, parent, title):
+        self.counter=0
         wx.Frame.__init__(self, parent, title=title, size=(450, 700))
         self.control = wx.TextCtrl(self, style = wx.TE_MULTILINE,size=(450,65))
-        self.control.SetBackgroundColour(wx.GREEN)
         
-        self.simulationWorker=None
+        self.simulationWorkers=None
+        self.checkUpdates=False
+        self.lastUpdateTime=time.time()
          # Set up event handler for any worker thread results
-        self.Connect(-1, -1, EVT_RESULT_ID, self.OnResult)
         self.Temperature=0
-        self.Velocity=0
+        self.Density=0
         
         ###loading an image
         fileList = os.listdir(os.getcwd())
@@ -240,6 +221,7 @@ class WindTunnelFrame(wx.Frame):
         self.CreateStatusBar()
         ###       
         
+        self.Bind(wx.EVT_IDLE, self.onIdle)
         
         ###make the file and help menus with different options        
         filemenu = wx.Menu()
@@ -264,20 +246,27 @@ class WindTunnelFrame(wx.Frame):
         
         
         ###put in panels
-        panel = wx.Panel(self, -1, size = (450,450), style = wx.SUNKEN_BORDER)   
+        #panel = wx.Panel(self, -1)# size = (450,450), style = wx.SUNKEN_BORDER)
+        self.windTunnelPanel = PlotPanel(self)
+        self.barPanel = BarPanel(self)
         self.controlPanel = wx.Panel(self, -1, style = wx.SUNKEN_BORDER)    
-        self.controlPanel.SetBackgroundColour("YELLOW")
+        
             
         panelSizer = wx.BoxSizer(wx.VERTICAL)
-        panelSizer.Add(panel)#, 1, wx.EXPAND)
-        panelSizer.Add(self.control)#, 1, wx.EXPAND)
+        panelSizer.Add(self.windTunnelPanel, 3, wx.EXPAND)
+        
+        pieSizer = wx.BoxSizer(wx.HORIZONTAL)
+        pieSizer.Add(self.control, 1, wx.EXPAND)
+        pieSizer.Add(self.barPanel, 1, wx.EXPAND)
+        
+        panelSizer.Add(pieSizer, 1, wx.EXPAND)
         panelSizer.Add(self.controlPanel, 1, wx.EXPAND)
             
         self.SetAutoLayout(True)
         self.SetSizer(panelSizer)
         self.Layout()
                        
-        self.windTunnelPanel = BezierPanel(panel)
+        #self.windTunnelPanel = PlotPanel(panel)
         ###
         
         
@@ -298,14 +287,14 @@ class WindTunnelFrame(wx.Frame):
         
         
         ###put in sliders
-        self.velocityslider = wx.Slider(self.controlPanel, minValue = 0, maxValue = 200, 
+        self.velocityslider = wx.Slider(self.controlPanel, minValue = 0, maxValue = 100, 
                                         style = wx.SL_AUTOTICKS | wx.SL_LABELS)        
-        velocityLabel = wx.StaticText(self.controlPanel, -1, "Wind Velocity")
+        velocityLabel = wx.StaticText(self.controlPanel, -1, "Density")
         self.Bind(wx.EVT_SLIDER, self.OnSlideVelocity, self.velocityslider)        
         
-        self.tempslider = wx.Slider(self.controlPanel, minValue = -25, maxValue = 25, 
+        self.tempslider = wx.Slider(self.controlPanel, minValue = 0, maxValue = 2000, 
                                     style = wx.SL_AUTOTICKS | wx.SL_LABELS)
-        tempLabel = wx.StaticText(self.controlPanel, -1, "Temperature")
+        tempLabel = wx.StaticText(self.controlPanel, -1, "Temperature (K)")
         self.Bind(wx.EVT_SLIDER, self.OnSlideTemp, self.tempslider)
         
         
@@ -323,15 +312,6 @@ class WindTunnelFrame(wx.Frame):
         tempHSizer.Add(tempVSizer2, 1, wx.EXPAND)
         ###
         
-        
-        ###put in the combobox
-        self.combobox = wx.ComboBox(self.controlPanel, size=(125, -1), 
-                                    choices = imageList, style = wx.CB_DROPDOWN)
-        self.Bind(wx.EVT_COMBOBOX, self.EvtComboBox, self.combobox)
-        hsizer.Add(self.combobox, 1, wx.ALL,5)
-        ###
-        
-        
         ###putting the sizers in place
         vsizer.Add(tempHSizer, 3, wx.EXPAND)
         vsizer.Add(hsizer, 1, wx.EXPAND)
@@ -340,10 +320,46 @@ class WindTunnelFrame(wx.Frame):
         vsizer.Fit(self.controlPanel)
         ###
         
-             
+        self.controlPanel.SetBackgroundColour("GRAY")
+        self.control.SetBackgroundColour("GRAY")
         self.Show(True)
     
-    
+    def onIdle(self,event):
+        if self.checkUpdates==True:
+            if time.time()-self.lastUpdateTime > 0.5 : 
+                self.counter+=1
+                in1=open('./mdcode/testData1.txt','r')
+                data1=in1.readlines()
+                in1.close()
+                if len(data1)>0:
+                    A=array( [ [float(line.split()[0]),float(line.split()[3])] for line in data1])
+                else:
+                    A=zeros((1,2))
+                in2=open('./mdcode/testData2.txt','r')
+                data2=in2.readlines()
+                in2.close()
+                if len(data2)>0:
+                    B=array( [ [float(line.split()[0]),float(line.split()[3])] for line in data2])
+                else:
+                    B=zeros((1,2))
+                in3=open('./mdcode/testData3.txt','r')
+                data3=in3.readlines()
+                in3.close()
+                if len(data3)>0:
+                    C=array( [ [float(line.split()[0]),float(line.split()[3])] for line in data3])
+                else:
+                    C=zeros((1,2))
+                self.windTunnelPanel.x=[A[:,0],B[:,0],C[:,0]]
+                self.windTunnelPanel.y=[A[:,1],B[:,1],C[:,1]]
+                self.barPanel.setData([A[-1,0],B[-1,0],C[-1,0]])
+                print 'Idling %d'%self.counter
+                self.windTunnelPanel.draw()
+                self.barPanel.draw()
+                self.lastUpdateTime=time.time()
+                wx.Yield()
+            
+
+            
     ###defining events on the menu              
     def OnOpen(self, e):       
         dlg = wx.FileDialog(self, message = "Choose a file", defaultDir = os.getcwd(), 
@@ -374,18 +390,14 @@ class WindTunnelFrame(wx.Frame):
             for point in data:
                 theString = str(point[0])+" "+str(point[1])
                 fp.write(theString + "\n")           
-#            test = ["cat", "dog", "bird", "pig", "cow"]
-#            for animal in test:
-#                fp.write(animal + "\n")
             fp.close()
         dlg.Destroy()
         self.control.AppendText("Saved \n")
  
      
     def OnClose(self, e):
+        self.OnClickPause(e)
         self.Close(True)
-    ###
-    
      
     ###defining events on the control panel
     def EvtComboBox(self, e):
@@ -403,24 +415,30 @@ class WindTunnelFrame(wx.Frame):
         
     def OnClickPlay(self, e):
         self.control.AppendText("Clicked on Play button\n")
-        #get a boolean representation of wing surface
-        theWing=self.windTunnelPanel.GetWing()
-        
+        self.controlPanel.SetBackgroundColour("YELLOW")
+        self.checkUpdates=True
         #run simulation in seperate thread
-        if self.simulationWorker!=None:
-            del self.simulationWorker
+        if self.simulationWorkers!=None:
+            del self.simulationWorkers
             
-        self.simulationWorker = SimulationWorker(self,theWing,self.Velocity,self.Temperature)
-        self.simulationWorker.start()
+        self.simulationWorkers = [
+            SimulationWorker(self,1),
+            SimulationWorker(self,2),
+            SimulationWorker(self,3)
+        ]
+        self.simulationWorkers[0].start()
+        self.simulationWorkers[1].start()
+        self.simulationWorkers[2].start()
             
     def OnClickPause(self, e):
         self.control.AppendText("Clicked on Pause button\n")
         self.controlPanel.SetBackgroundColour("GRAY")
-        if self.simulationWorker!=None:
-            self.simulationWorker.abort()    
-        
+        self.checkUpdates=False
+        if self.simulationWorkers!=None:
+            for worker in self.simulationWorkers:
+                worker.abort()
+          
     def OnSlideVelocity(self, e):
-        
         self.control.AppendText("Velocity Slider was moved %d\n" %e.GetInt())
         self.Velocity = e.GetInt()
     
@@ -429,15 +447,7 @@ class WindTunnelFrame(wx.Frame):
         self.control.AppendText("Temperature Slider was moved %d\n" %e.GetInt())
         self.Temperature = e.GetInt()
     
-    def OnResult(self,event):
-        if event.data != None:
-            theImage=wx.Image(event.data)
-            if self.windTunnelPanel.bitmap!=None:
-                self.windTunnelPanel.bitmap.Destroy()
-            self.windTunnelPanel.bitmap=wx.BitmapFromImage(theImage)
-            self.windTunnelPanel.reInitBuffer=True
-            self.Refresh()
-            wx.Yield()
+
         
 
 

@@ -103,6 +103,7 @@ void project ( int N, float * u, float * v, float * p, float * div, float* bound
 	set_bnd ( N, 1, u , boundMask,vel); set_bnd ( N, 2, v, boundMask,vel );
 }
 
+
 void dens_step( int N,float * x, float * x0, float * u, float * v,float* boundMask, float diff, float dt ,float vel)
 {
 
@@ -123,235 +124,23 @@ void vel_step( int N,float * u, float * v, float * u0, float * v0,float* boundMa
 	project ( N, u, v, u0, v0,boundMask ,vel);
 }
 
+         
+void testCUDA()
+{
+	//callC();	
+}
+ 
 void runstep( int N,float * u, float * v, float * u0, float * v0, float* dens,float* dens_prev,float* boundMask, float visc, float dt ,float diff,float vel)
 {
-	vel_step(N, u, v,u0,v0, boundMask, visc, dt,vel);
+  	vel_step(N, u, v,u0,v0, boundMask, visc, dt,vel);
 	dens_step(N,dens,dens_prev,u,v, boundMask, diff, dt,vel);
 }
 
 
-#pragma mark -
-#pragma mark Utilities
-int load_program_source(const char *inFileName, char** data)
+int main()
 {
-	FILE* input;
-	long  lFileLen;               /* Length of file */
-	
-	input = fopen(inFileName,"r");
-	if(input!=NULL){
-		fseek(input, 0L, SEEK_END);  /* Position to end of file */
-		lFileLen = ftell(input);     /* Get file length */
-		rewind(input);               /* Back to start of file */
-		(*data) = calloc(lFileLen + 2, sizeof(char));
-		int val = lFileLen + 1;
-		printf("file length =%d\n",val);
-		if((*data) == NULL )
-		{
-		  printf("\nInsufficient memory to read file.\n");
-		  return 0;
-		}
-		
-		fread((*data), lFileLen, 1, input); /* Read the entire file into data */
-		fclose(input);
-		(*data)[lFileLen]='\n';
-		(*data)[lFileLen+1]='\0';
-		return 1;
-	}
-	else
-	{
-		printf("could not open %s ",inFileName);
-		return 0;
-	}
-	
-
-} 
-
-#pragma mark -
-#pragma mark Main OpenCL Routine
-int runCL(float * a, float * results, int n)
-{
-	cl_program program[1];
-	cl_kernel kernel[2];
-	
-	cl_command_queue cmd_queue;
-	cl_context   context;
-	
-	cl_device_id cpu = NULL, device = NULL;
-
-	cl_int err = 0;
-	size_t returned_size = 0;
-	size_t buffer_size;
-	
-	cl_mem a_mem, ans_mem;
-	
-#pragma mark Device Information
-	{
-		// Find the CPU CL device, as a fallback
-		err = clGetDeviceIDs(NULL, CL_DEVICE_TYPE_CPU, 1, &cpu, NULL);
-		assert(err == CL_SUCCESS);
-		
-		// Find the GPU CL device, this is what we really want
-		// If there is no GPU device is CL capable, fall back to CPU
-		err = clGetDeviceIDs(NULL, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
-		if (err != CL_SUCCESS) device = cpu;
-		assert(device);
-	
-		// Get some information about the returned device
-		cl_char vendor_name[1024] = {0};
-		cl_char device_name[1024] = {0};
-		err = clGetDeviceInfo(device, CL_DEVICE_VENDOR, sizeof(vendor_name), 
-							  vendor_name, &returned_size);
-		err |= clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(device_name), 
-							  device_name, &returned_size);
-		assert(err == CL_SUCCESS);
-		printf("Connecting to %s %s...\n", vendor_name, device_name);
-	}
-	
-#pragma mark Context and Command Queue
-	{
-		// Now create a context to perform our calculation with the 
-		// specified device 
-		context = clCreateContext(0, 1, &device, NULL, NULL, &err);
-		assert(err == CL_SUCCESS);
-		
-		// And also a command queue for the context
-		cmd_queue = clCreateCommandQueue(context, device, 0, NULL);
-	}
-	
-#pragma mark Program and Kernel Creation
-	{
-		// Load the program source from disk
-		const char * filename = "example.cl";
-		
-		const char *program_source2 = "__kernel void set_wing_bnd ( __global float* boundMask,__global float * x){int gid = get_global_id(0);\nif (boundMask[gid]<10.0)\n{\nx[gid]=boundMask[gid];\n}\n}\n\n";
-	
-		FILE* input;
-		long  lFileLen;
-		input = fopen(filename,"r");
-		fseek(input, 0L, SEEK_END);  /* Position to end of file */
-		lFileLen = ftell(input);     /* Get file length */
-		rewind(input);               /* Back to start of file */
-		char *program_source = calloc(lFileLen + 2, sizeof(char));
-		fread(program_source, lFileLen, 1, input); /* Read the entire file into data */
-		fclose(input);
-		program_source[lFileLen]='\n';
-		program_source[lFileLen+1]='\0';
-		
-		//load_program_source(filename,program_source);
-		printf("file text from inside opencl routine is:\n%s\n",program_source);
-		program[0] = clCreateProgramWithSource(context, 1, (const char**)&program_source,
-											   NULL, &err);
-		assert(err == CL_SUCCESS);
-		
-		err = clBuildProgram(program[0], 0, NULL, NULL, NULL, NULL);
-		assert(err == CL_SUCCESS);
-		
-		// Now create the kernel "objects" that we want to use in the example file 
-		kernel[0] = clCreateKernel(program[0], "set_wing_bnd", &err);
-	}
-		
-#pragma mark Memory Allocation
-	{
-		// Allocate memory on the device to hold our data and store the results into
-		buffer_size = sizeof(float) * n;
-		
-		// Input array a
-		a_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, buffer_size, NULL, NULL);
-		err = clEnqueueWriteBuffer(cmd_queue, a_mem, CL_TRUE, 0, buffer_size,
-								   (void*)a, 0, NULL, NULL);
-		assert(err == CL_SUCCESS);
-		
-		// Results array
-		ans_mem	= clCreateBuffer(context, CL_MEM_READ_WRITE, buffer_size, NULL, NULL);
-		
-		// Get all of the stuff written and allocated 
-		clFinish(cmd_queue);
-	}
-	
-#pragma mark Kernel Arguments
-	{
-		// Now setup the arguments to our kernel
-		err  = clSetKernelArg(kernel[0],  0, sizeof(cl_mem), &a_mem);
-		err |= clSetKernelArg(kernel[0],  1, sizeof(cl_mem), &ans_mem);
-		assert(err == CL_SUCCESS);
-	}
-	
-#pragma mark Execution and Read
-	{
-		// Run the calculation by enqueuing it and forcing the 
-		// command queue to complete the task
-		size_t global_work_size = n;
-		err = clEnqueueNDRangeKernel(cmd_queue, kernel[0], 1, NULL, 
-									 &global_work_size, NULL, 0, NULL, NULL);
-		assert(err == CL_SUCCESS);
-		clFinish(cmd_queue);
-		
-		// Once finished read back the results from the answer 
-		// array into the results array
-		err = clEnqueueReadBuffer(cmd_queue, ans_mem, CL_TRUE, 0, buffer_size, 
-								  results, 0, NULL, NULL);
-		assert(err == CL_SUCCESS);
-		clFinish(cmd_queue);
-	}
-	
-#pragma mark Teardown
-	{
-		clReleaseMemObject(a_mem);
-		clReleaseMemObject(ans_mem);
-		
-		clReleaseCommandQueue(cmd_queue);
-		clReleaseContext(context);
-	}
-	return CL_SUCCESS;
+	printf("in main, about to callCUDA");
+	testCUDA();
+	return 0;
 }
-
-
-
-int testOpenCL(int probSize)
-{
-	
-	// Problem size
-	int n = probSize;
-	
-	// Allocate some memory and a place for the results
-	float * a = (float *)malloc(n*sizeof(float));
-	float * results = (float *)malloc(n*sizeof(float));
-	
-	// Fill in the values
-	int i=0;
-	for(i;i<n;i++){
-		a[i] = 2*(float)i;
-		results[i] = 1.f;
-		printf("a=%f,input=%f\n",a[i],results[i]);
-		
-	}
-	
-	// Do the OpenCL calculation
-	//const char * filename = "example.cl";
-	//char *program_source;
-	//load_program_source(filename,&program_source);
-	//printf("file text from outside  openCL routine is:\n %s\n",program_source);
-	
-	runCL(a, results, n);
-	int sum=0;
-	// Print out some results. For this example the values of all elements
-	// should be the same as the value of n
-	i=0;
-	for(i;i<n;i++) 
-	{
-		printf("a=%f , results= %f\n",a[i],results[i]);
-		sum=sum+results[i];
-	}
-	
-	// Free up memory
-	free(a);
-	free(results);
-	
-	return sum;
-}
- 
-
-
-
-
 

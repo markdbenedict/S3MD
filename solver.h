@@ -13,4 +13,4 @@ void vel_step( int N,float * u, float * v, float * u0, float * v0,float* b, floa
 
 void runstep( int N,float * u, float * v, float * u0, float * v0, float* dens,float* dens_prev,float* b, float visc, float dt ,float diff,float vel);
 
-int testOpenCL(int probSize);
+void testCUDA();
