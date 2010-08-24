@@ -12,4 +12,4 @@ stepAvg           200
 stepEquil         0
 stepLimit         5000
 stepRdf           50
-temperature       0.08
+temperature       0.16

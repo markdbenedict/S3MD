@@ -84,14 +84,13 @@ flag, and the actual resizing of the figure is triggered by an Idle event."""
             self.axes.legend(('Base','ANN','ANN-GPU'),loc=2,fancybox=True)
             self.axes.set_xlabel('Timestep')
             self.axes.set_ylabel=('Pressure')
-            ticks=[0.999*self.y[2].max(),self.y[2].max(),1.001*self.y[2].max()]
+            ticks=[0.98*self.y[2].max(),self.y[2].max(),1.02*self.y[2].max()]
             self.axes.set_ylim((ticks[0],ticks[2]))
-            strLabels=['%.3f'%(0.999*ticks[0]),
+            strLabels=['%.3f'%(0.98*ticks[0]),
                        '%.3f'%ticks[1],
-                       '%.3f'%(1.001*ticks[2])]
+                       '%.3f'%(1.02*ticks[2])]
             self.axes.set_yticklabels(strLabels)
             self.axes.set_yticks(ticks)
-            print ticks
             self.canvas.draw()
             
 class BarPanel (wx.Panel):
@@ -153,7 +152,7 @@ class BarPanel (wx.Panel):
         val2=tempVals[2]/float(tempVals[0])
         del self.speedup1[0]
         self.speedup1.append(val1)   
-        del self.speedup1[0]
+        del self.speedup2[0]
         self.speedup2.append(val2)
     
     def draw(self):
@@ -324,6 +323,25 @@ class WindTunnelFrame(wx.Frame):
         self.controlPanel.SetBackgroundColour("GRAY")
         self.control.SetBackgroundColour("GRAY")
         self.Show(True)
+    
+    def readRDF(self,fileName):
+        rdfFile=open(fileName,'r')
+        rdfData=rdfFile.readlines()
+        rdfFile.close()
+        rdfData.reverse()
+        
+        data=[] #list of rdfs
+        currRdf=[] #rdf at a single point in time
+        
+        while len(rdfData)>0:
+            item = rdfData.pop()
+            if 'rdf' in item:
+                data.append(array(currRdf))
+                currRdf=[]
+            else:
+                line=item.split()
+                currRdf.append((float(line[0]),float(line[1])))
+        return data
     
     def onIdle(self,event):
         if self.checkUpdates==True:
