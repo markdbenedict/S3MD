@@ -31,9 +31,14 @@ real dispHi, rNebrShell;
 int *nebrTab, nebrNow, nebrTabFac, nebrTabLen, nebrTabMax;
 int *nebrTabPtr;
 int stepAdjustTemp;
-real *histRdf, rangeRdf;
+real *histRdf, rangeRdf,*atomPotential,*g1,*g2,*g3,*g4,*g5,*g6;
+real *g7,*g8,*g9,*g10,*g11,*g12;
+real *g13,*g14,*g15,*g16,*g17,*g18;
+real *g19,*g20,*g21,*g22,*g23,*g24;
+real *g25,*g26,*g27,*g28,*g29,*g30;
+real *g31,*g32,*g33,*g34,*g35,*g36;
 int countRdf, limitRdf, sizeHistRdf, stepRdf;
-FILE* rdfFile;
+FILE *rdfFile,*trainingData;
 
 NameList nameList[] = {
   NameR (deltaT),
@@ -53,17 +58,24 @@ NameList nameList[] = {
   NameR (temperature),
 };
 
+void SetupTraining();
+void  ComputeTraining();
+void WriteOutTrainingData();
 
 int main (int argc, char **argv)
 {
   GetNameList (argc, argv);
-  char fileStr[30];
+  char fileStr[80];
   strcat(fileStr,argv[0]);
   strcat(fileStr,".rdf");
-  //PrintNameList (stdout);
+  //printf(fileStr);
+  
+  PrintNameList (stdout);
   rdfFile=fopen(fileStr,"w");
+  
   SetParams ();
   SetupJob ();
+SetupTraining();
   //printf("numAtoms=%d",nMol);
   moreCycles = 1;
   while (moreCycles) {
@@ -84,6 +96,7 @@ void SingleStep ()
   }
   PredictorStep ();
   ComputeForces ();
+  
   ApplyThermostat ();
   CorrectorStep ();
   ApplyBoundaryCond ();
@@ -96,7 +109,7 @@ void SingleStep ()
     AccumProps (0);
   }
   if (stepCount >= stepEquil && (stepCount - stepEquil) %
-     stepRdf == 0) EvalRdf ();
+     stepRdf == 0) ComputeTraining();//EvalRdf ();
 }
 
 void SetupJob ()
@@ -120,6 +133,48 @@ void SetParams ()
   nebrTabMax = nebrTabFac * nMol;
 }
 
+void SetupTraining()
+{
+	trainingData=fopen("/Users/MarkB/Desktop/trainingData.txt","w");
+    printf("nMol=%d  size of arrays=%d",nMol,sizeof(double)*nMol);
+	atomPotential =(double*)malloc(sizeof(double)*nMol);
+	AllocMem (g1, nMol, real);
+	AllocMem (g2, nMol, real);
+	AllocMem (g3, nMol, real);
+	AllocMem (g4, nMol, real);
+	AllocMem (g5, nMol, real);
+	AllocMem (g6, nMol, real);
+	AllocMem (g7, nMol, real);
+	AllocMem (g8, nMol, real);
+	AllocMem (g9, nMol, real);
+	AllocMem (g10, nMol, real);
+	AllocMem (g11, nMol, real);
+	AllocMem (g12, nMol, real);
+	AllocMem (g13, nMol, real);
+	AllocMem (g14, nMol, real);
+	AllocMem (g15, nMol, real);
+	AllocMem (g16, nMol, real);
+	AllocMem (g17, nMol, real);
+	AllocMem (g18, nMol, real);
+	AllocMem (g19, nMol, real);
+	AllocMem (g20, nMol, real);
+	AllocMem (g21, nMol, real);
+	AllocMem (g22, nMol, real);
+	AllocMem (g23, nMol, real);
+	AllocMem (g24, nMol, real);
+	AllocMem (g25, nMol, real);
+	AllocMem (g26, nMol, real);
+	AllocMem (g27, nMol, real);
+	AllocMem (g28, nMol, real);
+	AllocMem (g29, nMol, real);
+	AllocMem (g30, nMol, real);
+	AllocMem (g31, nMol, real);
+	AllocMem (g32, nMol, real);
+	AllocMem (g33, nMol, real);
+	AllocMem (g34, nMol, real);
+	AllocMem (g35, nMol, real);
+	AllocMem (g36, nMol, real);
+}
 void AllocArrays ()
 {
   AllocMem (mol, nMol, Mol);
@@ -149,12 +204,12 @@ void BuildNebrList ()
 
   rrNebr = Sqr (rCut + rNebrShell);
   VDiv (invWid, cells, region);
-  for (n = nMol; n < nMol + VProd (cells); n ++)
+  for (n = nMol; n < nMol + VProd (cells); n ++) //set default of -1 for all cells
      cellList[n] = -1;
   DO_MOL {
-    VSAdd (rs, mol[n].r, 0.5, region);
-    VMul (cc, rs, invWid);
-    c = VLinear (cc, cells) + nMol;
+    VSAdd (rs, mol[n].r, 0.5, region); // add 1/2 the region value to each atom position 
+    VMul (cc, rs, invWid); //multiply the position by the inverse width
+    c = VLinear (cc, cells) + nMol; //c is which cell its in?
     cellList[n] = cellList[c];
     cellList[c] = n;
   }
@@ -191,18 +246,18 @@ void ComputeForces ()
      gCon = 1.2, lCon = 21., p12, p13, ri, ri3, rm,
      rm12, rm13, rr, rr12, rr13, rrCut;
   int j1, j2, j3, m2, m3, n;
-
   rrCut = Sqr (rCut) - 0.001;
   DO_MOL VZero (mol[n].ra);
   uSum = 0.;
-  for (j1 = 0; j1 < nMol; j1 ++) {
+  for (j1 = 0; j1 < nMol; j1 ++) { //2body terms
     for (m2 = nebrTabPtr[j1]; m2 < nebrTabPtr[j1 + 1]; m2 ++) {
       j2 = nebrTab[m2];
-      if (j1 < j2) {
+      if (j1 < j2) {  //will have to take this out with ANN, Newtons 3rd law wont help, need to consider all atoms pairs for each atom to get correct G1(i) and G2(i)
         VSub (dr, mol[j1].r, mol[j2].r);
         VWrapAll (dr);
         rr = VLenSq (dr);
         if (rr < rrCut) {
+		  //calculate if i,j conribution to G1(i)and add it to sum for i
           rm = sqrt (rr);
           er = exp (1. / (rm - rCut));
           ri = 1. / rm;
@@ -212,11 +267,11 @@ void ComputeForces ()
           VVSAdd (mol[j1].ra, fcVal, dr);
           VVSAdd (mol[j2].ra, - fcVal, dr);
           uSum += aCon * (bCon * ri3 * ri - 1.) * er;
-        }
+        } 
       }
-    }
+	}
   }
-  for (j1 = 0; j1 < nMol; j1 ++) {
+  for (j1 = 0; j1 < nMol; j1 ++) { //3 body terms
     for (m2 = nebrTabPtr[j1]; m2 < nebrTabPtr[j1 + 1] - 1; m2 ++) {
       j2 = nebrTab[m2];
       VSub (dr12, mol[j1].r, mol[j2].r);
@@ -295,6 +350,181 @@ void PredictorStep ()
     mol[n].ra1 = mol[n].ra;
   }
 }
+
+void ComputeTraining()
+{
+	VecR dr, dr12, dr13, w2, w3;
+	real fc=0,mu=0.1,Rs=rCut,zeta=2.0,lambda=1.0;
+	real mu2=0.2,Rs2=rCut/2.0,zeta2=3.0,lambda2=-1.0;
+	real mu3=0.3,Rs3=rCut/6.0,zeta3=4.0,lambda3=1.0;
+	real mu4=0.5,Rs4=rCut/3.0,zeta4=1.4,lambda4=-1.0;
+	real mu5=0.321,Rs5=rCut/5.0,zeta5=2.4,lambda5=1.0;
+	real mu6=0.6,Rs6=rCut/1.5,zeta6=2.5,lambda6=-1.0;
+	real mu7=0.123,Rs7=rCut/1.25,zeta7=3.3,lambda7=1.0;
+	real aCon = 7.0496, bCon = 0.60222, cr, er, fcVal,theta;
+	real gCon = 1.2, lCon = 21., p12, p13, ri, ri3, rm, rm12, rm13,rm23, rr, rr12, rr13, rrCut;
+	int j1, j2, j3, m2, m3, n;
+
+	rrCut = Sqr (rCut) - 0.001;
+	DO_MOL VZero (mol[n].ra);
+	DO_MOL
+	{
+		atomPotential[n]=0;
+		g1[n]=0;
+		g2[n]=0;
+		g3[n]=0;
+		g4[n]=0;
+		g5[n]=0;
+		g6[n]=0;
+		
+		g7[n]=0;
+		g8[n]=0;
+		g9[n]=0;
+		g10[n]=0;
+		g11[n]=0;
+		g12[n]=0;
+
+		g13[n]=0;
+		g14[n]=0;
+		g15[n]=0;
+		g16[n]=0;
+		g17[n]=0;
+		g18[n]=0;
+
+		g19[n]=0;
+		g20[n]=0;
+		g21[n]=0;
+		g22[n]=0;
+		g23[n]=0;
+		g24[n]=0;
+
+		g25[n]=0;
+		g26[n]=0;
+		g27[n]=0;
+		g28[n]=0;
+		g29[n]=0;
+		g30[n]=0;
+
+		g31[n]=0;
+		g32[n]=0;
+		g33[n]=0;
+		g34[n]=0;
+		g35[n]=0;
+		g36[n]=0;
+		
+	}
+	uSum = 0.;
+	for (j1 = 0; j1 < nMol; j1 ++) { //2body terms
+		for (m2 = nebrTabPtr[j1]; m2 < nebrTabPtr[j1 + 1]; m2 ++) {
+			j2 = nebrTab[m2];
+			VSub (dr, mol[j1].r, mol[j2].r);
+			VWrapAll (dr);
+			rr = VLenSq (dr);
+			if (rr < rrCut) {
+				//calculate if i,j conribution to G1(i)and add it to sum for i
+				rm = sqrt (rr);
+				er = exp (1. / (rm - rCut));
+				ri = 1. / rm;
+				ri3 = Cube (ri);
+				fcVal = aCon * (4. * bCon * Sqr (ri3) +
+								(bCon * ri3 * ri - 1.) * ri / Sqr (rm - rCut)) * er;
+				VVSAdd (mol[j1].ra, fcVal, dr);
+				VVSAdd (mol[j2].ra, - fcVal, dr);
+				uSum += aCon * (bCon * ri3 * ri - 1.) * er;
+				atomPotential[j1]+=aCon * (bCon * ri3 * ri - 1.) * er;
+				fc=1.0+0.5*cos(3.1419*rm/rCut);
+				g1[j1]+=exp(-mu*(rm-Rs)*(rm-Rs))*fc;
+				g3[j1]+=exp(-mu2*(rm-Rs2)*(rm-Rs2))*fc;
+				g5[j1]+=exp(-mu3*(rm-Rs3)*(rm-Rs3))*fc;
+				g7[j1]+=exp(-mu5*(rm-Rs5)*(rm-Rs5))*fc;
+				g9[j1]+=exp(-mu6*(rm-Rs6)*(rm-Rs6))*fc;
+				g11[j1]+=exp(-mu7*(rm-Rs)*(rm-Rs))*fc;
+				g13[j1]+=exp(-mu2*(rm-Rs6)*(rm-Rs6))*fc;
+				g15[j1]+=exp(-mu3*(rm-Rs7)*(rm-Rs7))*fc;
+				g17[j1]+=exp(-mu*(rm-Rs4)*(rm-Rs4))*fc;
+				g19[j1]+=exp(-mu*(rm-Rs)*(rm-Rs))*fc;
+				g21[j1]+=exp(-mu2*(rm-Rs2)*(rm-Rs2))*fc;
+				g23[j1]+=exp(-mu3*(rm-Rs3)*(rm-Rs3))*fc;
+				g25[j1]+=exp(-mu5*(rm-Rs5)*(rm-Rs5))*fc;
+				g27[j1]+=exp(-mu6*(rm-Rs6)*(rm-Rs6))*fc;
+				g29[j1]+=exp(-mu7*(rm-Rs)*(rm-Rs))*fc;
+				g31[j1]+=exp(-mu2*(rm-Rs6)*(rm-Rs6))*fc;
+				g33[j1]+=exp(-mu3*(rm-Rs7)*(rm-Rs7))*fc;
+				g35[j1]+=exp(-mu*(rm-Rs4)*(rm-Rs4))*fc;
+				
+			} 
+		}
+	}
+	for (j1 = 0; j1 < nMol; j1 ++) { //3 body terms
+		for (m2 = nebrTabPtr[j1]; m2 < nebrTabPtr[j1 + 1] - 1; m2 ++) {
+			j2 = nebrTab[m2];
+			VSub (dr12, mol[j1].r, mol[j2].r);
+			VWrapAll (dr12);
+			rr12 = VLenSq (dr12);
+			if (rr12 < rrCut) {
+				rm12 = sqrt (rr12);
+				VScale (dr12, 1. / rm12);
+				for (m3 = m2 + 1; m3 < nebrTabPtr[j1 + 1]; m3 ++) {
+					j3 = nebrTab[m3];
+					VSub (dr13, mol[j1].r, mol[j3].r);
+					VWrapAll (dr13);
+					rr13 = VLenSq (dr13);
+					if (rr13 < rrCut) {
+						rm13 = sqrt (rr13);
+						VScale (dr13, 1. / rm13);
+						cr = VDot (dr12, dr13);
+						er = lCon * (cr + 1./3.) * exp (gCon / (rm12 - rCut) + gCon /
+														(rm13 - rCut));
+						p12 = gCon * (cr + 1./3.) / Sqr (rm12 - rCut);
+						p13 = gCon * (cr + 1./3.) / Sqr (rm13 - rCut);
+						VSSAdd (w2, p12 + 2. * cr / rm12, dr12, - 2. / rm12, dr13);
+						VSSAdd (w3, p13 + 2. * cr / rm13, dr13, - 2. / rm13, dr12);
+						VScale (w2, - er);
+						VScale (w3, - er);
+						VVSub (mol[j1].ra, w2);
+						VVSub (mol[j1].ra, w3);
+						VVAdd (mol[j2].ra, w2);
+						VVAdd (mol[j3].ra, w3);
+						uSum += (cr + 1./3.) * er;
+						atomPotential[j1]+=(cr + 1./3.) * er;
+						theta=cr/rm13/rm12;
+						VecR dr23;
+						VSub (dr23, mol[j2].r, mol[j3].r); 
+						rm23= sqrt(VLenSq (dr23));
+						fc=(1.0+0.5*cos(3.1419*rm12/rCut))*(1.0+0.5*cos(3.1419*rm13/rCut))*(1.0+0.5*cos(3.1419*rm23/rCut));
+						g2[j1]+=pow((1.0+lambda*cos(theta)),zeta) * exp(-mu*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g4[j1]+=pow((1.0+lambda2*cos(theta)),zeta2) * exp(-mu2*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g6[j1]+=pow((1.0+lambda3*cos(theta)),zeta3) * exp(-mu3*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g8[j1]+=pow((1.0+lambda4*cos(theta)),zeta4) * exp(-mu7*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g10[j1]+=pow((1.0+lambda5*cos(theta)),zeta5) * exp(-mu3*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g12[j1]+=pow((1.0+lambda6*cos(theta)),zeta6) * exp(-mu4*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g14[j1]+=pow((1.0+lambda7*cos(theta)),zeta7) * exp(-mu5*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g16[j1]+=pow((1.0+lambda2*cos(theta)),zeta5) * exp(-mu6*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g18[j1]+=pow((1.0+lambda3*cos(theta)),zeta6) * exp(-mu7*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g20[j1]+=pow((1.0+lambda*cos(theta)),zeta) * exp(-mu*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g22[j1]+=pow((1.0+lambda2*cos(theta)),zeta2) * exp(-mu2*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g24[j1]+=pow((1.0+lambda3*cos(theta)),zeta3) * exp(-mu3*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g26[j1]+=pow((1.0+lambda4*cos(theta)),zeta4) * exp(-mu7*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g28[j1]+=pow((1.0+lambda5*cos(theta)),zeta5) * exp(-mu3*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g30[j1]+=pow((1.0+lambda6*cos(theta)),zeta6) * exp(-mu4*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g32[j1]+=pow((1.0+lambda7*cos(theta)),zeta7) * exp(-mu5*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g34[j1]+=pow((1.0+lambda2*cos(theta)),zeta5) * exp(-mu6*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g36[j1]+=pow((1.0+lambda3*cos(theta)),zeta6) * exp(-mu7*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+					}
+				}
+			}
+		}
+	}
+	real atomUSum = 0;
+	for (n=0;n<nMol;n++)
+	{
+		atomUSum+=atomPotential[n];
+	}
+	
+	printf("atomPotential sum=%f localSum=%f\n",atomUSum,uSum);
+	WriteOutTrainingData();
+}
+
 
 void CorrectorStep ()
 {
@@ -476,28 +706,45 @@ void EvalProps ()
 
 void AccumProps (int icode)
 {
-  if (icode == 0) {
-    PropZero (totEnergy);
-    PropZero (kinEnergy);
-  } else if (icode == 1) {
-    PropAccum (totEnergy);
-    PropAccum (kinEnergy);
-  } else if (icode == 2) {
-    PropAvg (totEnergy, stepAvg);
-    PropAvg (kinEnergy, stepAvg);
-  }
+	if (icode == 0) {
+		PropZero (totEnergy);
+		PropZero (kinEnergy);
+	} else if (icode == 1) {
+		PropAccum (totEnergy);
+		PropAccum (kinEnergy);
+	} else if (icode == 2) {
+		PropAvg (totEnergy, stepAvg);
+		PropAvg (kinEnergy, stepAvg);
+	}
 }
 
 
 void PrintSummary (FILE *fp)
 {
-  fprintf (fp,
-     "%5d %8.4f %7.4f %7.4f %7.4f %7.4f %7.4f\n",
-     stepCount, timeNow, VCSum (vSum) / nMol, PropEst (totEnergy),
-     PropEst (kinEnergy));
-  fflush (fp);
+	fprintf (fp,
+			 "%5d %8.4f %7.4f %7.4f %7.4f %7.4f %7.4f\n",
+			 stepCount, timeNow, VCSum (vSum) / nMol, PropEst (totEnergy),
+			 PropEst (kinEnergy));
+	fflush (fp);
 }
 
+void WriteOutTrainingData()
+{
+	int n;
+	
+    for (n = 0; n < nMol; n ++) {
+		fprintf (trainingData, "%8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f\n", 
+				 g1[n], g2[n],g3[n],g4[n],g5[n],g6[n], 
+				 g7[n], g8[n],g9[n],g10[n],g11[n],g12[n], 
+				 g13[n], g14[n],g15[n],g16[n],g17[n],g18[n], 
+				 g19[n], g20[n],g21[n],g22[n],g23[n],g24[n], 
+				 g25[n], g26[n],g27[n],g28[n],g29[n],g30[n], 
+				 g31[n], g32[n],g33[n],g34[n],g35[n],g36[n], 
+				 
+				 atomPotential[n]);
+	}
+	fflush (trainingData);
+}
 
 #include "in_rand.c"
 #include "in_errexit.c"

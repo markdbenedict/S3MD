@@ -339,30 +339,34 @@ void EvalProps ()
   if (dispHi > 0.5 * rNebrShell) nebrNow = 1;
   kinEnergy.val = 0.5 * vvSum / nMol;
   totEnergy.val = kinEnergy.val + uSum / nMol;
+  pressure.val = density * (vvSum + virSum) / (nMol * NDIM);
 }
 
 
 void AccumProps (int icode)
 {
-  if (icode == 0) {
-    PropZero (totEnergy);
-    PropZero (kinEnergy);
-  } else if (icode == 1) {
-    PropAccum (totEnergy);
-    PropAccum (kinEnergy);
-  } else if (icode == 2) {
-    PropAvg (totEnergy, stepAvg);
-    PropAvg (kinEnergy, stepAvg);
-  }
+	if (icode == 0) {
+		PropZero (totEnergy);
+		PropZero (kinEnergy);
+		PropZero (pressure);
+	} else if (icode == 1) {
+		PropAccum (totEnergy);
+		PropAccum (kinEnergy);
+		PropAccum (pressure);
+	} else if (icode == 2) {
+		PropAvg (totEnergy, stepAvg);
+		PropAvg (kinEnergy, stepAvg);
+		PropAvg (pressure, stepAvg);
+	}
 }
 
 
 void PrintSummary (FILE *fp)
 {
   fprintf (fp,
-     "%5d %8.4f %7.4f %7.4f %7.4f %7.4f %7.4f\n",
+     "%5d %8.4f %7.4f %7.4f %7.4f %7.4f %7.4f %7.4f %7.4f\n",
      stepCount, timeNow, VCSum (vSum) / nMol, PropEst (totEnergy),
-     PropEst (kinEnergy));
+     PropEst (kinEnergy), PropEst (pressure));
   fflush (fp);
 }
 
