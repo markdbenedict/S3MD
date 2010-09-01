@@ -351,21 +351,21 @@ class WindTunnelFrame(wx.Frame):
                 data1=in1.readlines()
                 in1.close()
                 if len(data1)>0:
-                    A=array( [ [float(line.split()[0]),float(line.split()[3])] for line in data1])
+                    A=array( [ [float(line.split()[0]),float(line.split()[3])+float(line.split()[5])] for line in data1])
                 else:
                     A=zeros((1,2))
                 in2=open('./mdcode/testData2.txt','r')
                 data2=in2.readlines()
                 in2.close()
                 if len(data2)>0:
-                    B=array( [ [float(line.split()[0]),float(line.split()[3])] for line in data2])
+                    B=array( [ [float(line.split()[0]),float(line.split()[3])+float(line.split()[5])] for line in data2])
                 else:
                     B=zeros((1,2))
                 in3=open('./mdcode/testData3.txt','r')
                 data3=in3.readlines()
                 in3.close()
                 if len(data3)>0:
-                    C=array( [ [float(line.split()[0]),float(line.split()[3])] for line in data3])
+                    C=array( [ [float(line.split()[0]),float(line.split()[3])+float(line.split()[5])] for line in data3])
                 else:
                     C=zeros((1,2))
                 self.windTunnelPanel.x=[A[:,0],B[:,0],C[:,0]]
