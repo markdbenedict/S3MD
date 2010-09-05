@@ -63,9 +63,11 @@ NameList nameList[] = {
 void SetupTraining();
 void  ComputeTraining();
 void WriteOutTrainingData();
+extern int testCuda();
 
 int main (int argc, char **argv)
 {
+  testCuda();
   GetNameList (argc, argv);
   char fileStr[80];
   strcat(fileStr,argv[0]);
@@ -371,7 +373,7 @@ void ComputeTraining()
 	VecR dr, dr12, dr13, w2, w3;
 	real fc=0;
 	static real eta[5] = {0.01,0.1,0.5,1.0,10.0};
-	static real Rs[5] = {1.0,2.0,3.0,4.0,5.0,6.0};
+	static real Rs[6] = {1.0,2.0,3.0,4.0,5.0,6.0};
 	static int zeta[3] = {1,2,3};
 	static int lambda[2] = {-1,1};
 	real ThetaMin=999;
