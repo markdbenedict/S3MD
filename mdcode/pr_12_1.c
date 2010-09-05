@@ -37,6 +37,8 @@ real *g13,*g14,*g15,*g16,*g17,*g18;
 real *g19,*g20,*g21,*g22,*g23,*g24;
 real *g25,*g26,*g27,*g28,*g29,*g30;
 real *g31,*g32,*g33,*g34,*g35,*g36;
+real *g37,*g38,*g39,*g40,*g41,*g42;
+real *g43,*g44,*g45,*g46,*g47,*g48;
 int countRdf, limitRdf, sizeHistRdf, stepRdf;
 FILE *rdfFile,*trainingData;
 
@@ -174,6 +176,19 @@ void SetupTraining()
 	AllocMem (g34, nMol, real);
 	AllocMem (g35, nMol, real);
 	AllocMem (g36, nMol, real);
+	AllocMem (g37, nMol, real);
+	AllocMem (g38, nMol, real);
+	AllocMem (g39, nMol, real);
+	AllocMem (g40, nMol, real);
+	AllocMem (g41, nMol, real);
+	AllocMem (g42, nMol, real);
+	AllocMem (g43, nMol, real);
+	AllocMem (g44, nMol, real);
+	AllocMem (g45, nMol, real);
+	AllocMem (g46, nMol, real);
+	AllocMem (g47, nMol, real);
+	AllocMem (g48, nMol, real);
+	
 }
 void AllocArrays ()
 {
@@ -354,13 +369,14 @@ void PredictorStep ()
 void ComputeTraining()
 {
 	VecR dr, dr12, dr13, w2, w3;
-	real fc=0,mu=0.1,Rs=rCut,zeta=2.0,lambda=1.0;
-	real mu2=0.2,Rs2=rCut/2.0,zeta2=3.0,lambda2=-1.0;
-	real mu3=0.3,Rs3=rCut/6.0,zeta3=4.0,lambda3=1.0;
-	real mu4=0.5,Rs4=rCut/3.0,zeta4=1.4,lambda4=-1.0;
-	real mu5=0.321,Rs5=rCut/5.0,zeta5=2.4,lambda5=1.0;
-	real mu6=0.6,Rs6=rCut/1.5,zeta6=2.5,lambda6=-1.0;
-	real mu7=0.123,Rs7=rCut/1.25,zeta7=3.3,lambda7=1.0;
+	real fc=0;
+	static real eta[5] = {0.01,0.1,0.5,1.0,10.0};
+	static real Rs[5] = {1.0,2.0,3.0,4.0,5.0,6.0};
+	static int zeta[3] = {1,2,3};
+	static int lambda[2] = {-1,1};
+	real ThetaMin=999;
+	real ThetaMax = 0;
+	
 	real aCon = 7.0496, bCon = 0.60222, cr, er, fcVal,theta;
 	real gCon = 1.2, lCon = 21., p12, p13, ri, ri3, rm, rm12, rm13,rm23, rr, rr12, rr13, rrCut;
 	int j1, j2, j3, m2, m3, n;
@@ -411,6 +427,20 @@ void ComputeTraining()
 		g34[n]=0;
 		g35[n]=0;
 		g36[n]=0;
+
+		g37[n]=0;
+		g38[n]=0;
+		g39[n]=0;
+		g40[n]=0;
+		g41[n]=0;
+		g42[n]=0;
+		
+		g43[n]=0;
+		g44[n]=0;
+		g45[n]=0;
+		g46[n]=0;
+		g47[n]=0;
+		g48[n]=0;
 		
 	}
 	uSum = 0.;
@@ -433,24 +463,34 @@ void ComputeTraining()
 				uSum += aCon * (bCon * ri3 * ri - 1.) * er;
 				atomPotential[j1]+=aCon * (bCon * ri3 * ri - 1.) * er;
 				fc=1.0+0.5*cos(3.1419*rm/rCut);
-				g1[j1]+=exp(-mu*(rm-Rs)*(rm-Rs))*fc;
-				g3[j1]+=exp(-mu2*(rm-Rs2)*(rm-Rs2))*fc;
-				g5[j1]+=exp(-mu3*(rm-Rs3)*(rm-Rs3))*fc;
-				g7[j1]+=exp(-mu5*(rm-Rs5)*(rm-Rs5))*fc;
-				g9[j1]+=exp(-mu6*(rm-Rs6)*(rm-Rs6))*fc;
-				g11[j1]+=exp(-mu7*(rm-Rs)*(rm-Rs))*fc;
-				g13[j1]+=exp(-mu2*(rm-Rs6)*(rm-Rs6))*fc;
-				g15[j1]+=exp(-mu3*(rm-Rs7)*(rm-Rs7))*fc;
-				g17[j1]+=exp(-mu*(rm-Rs4)*(rm-Rs4))*fc;
-				g19[j1]+=exp(-mu*(rm-Rs)*(rm-Rs))*fc;
-				g21[j1]+=exp(-mu2*(rm-Rs2)*(rm-Rs2))*fc;
-				g23[j1]+=exp(-mu3*(rm-Rs3)*(rm-Rs3))*fc;
-				g25[j1]+=exp(-mu5*(rm-Rs5)*(rm-Rs5))*fc;
-				g27[j1]+=exp(-mu6*(rm-Rs6)*(rm-Rs6))*fc;
-				g29[j1]+=exp(-mu7*(rm-Rs)*(rm-Rs))*fc;
-				g31[j1]+=exp(-mu2*(rm-Rs6)*(rm-Rs6))*fc;
-				g33[j1]+=exp(-mu3*(rm-Rs7)*(rm-Rs7))*fc;
-				g35[j1]+=exp(-mu*(rm-Rs4)*(rm-Rs4))*fc;
+				g1[j1]+=exp(-eta[0]*(rm-Rs[0])*(rm-Rs[0]))*fc;
+				g2[j1]+=exp(-eta[0]*(rm-Rs[5])*(rm-Rs[5]))*fc;
+				
+				g3[j1]+=exp(-eta[1]*(rm-Rs[0])*(rm-Rs[0]))*fc;
+				g4[j1]+=exp(-eta[1]*(rm-Rs[1])*(rm-Rs[1]))*fc;
+				g5[j1]+=exp(-eta[1]*(rm-Rs[2])*(rm-Rs[2]))*fc;
+				g6[j1]+=exp(-eta[1]*(rm-Rs[3])*(rm-Rs[3]))*fc;
+				g7[j1]+=exp(-eta[1]*(rm-Rs[4])*(rm-Rs[4]))*fc;
+				g8[j1]+=exp(-eta[1]*(rm-Rs[5])*(rm-Rs[5]))*fc;
+				
+				g9[j1]+=exp(-eta[2]*(rm-Rs[0])*(rm-Rs[0]))*fc;
+				g10[j1]+=exp(-eta[2]*(rm-Rs[1])*(rm-Rs[1]))*fc;
+				g11[j1]+=exp(-eta[2]*(rm-Rs[2])*(rm-Rs[2]))*fc;
+				g12[j1]+=exp(-eta[2]*(rm-Rs[3])*(rm-Rs[3]))*fc;
+				g13[j1]+=exp(-eta[2]*(rm-Rs[4])*(rm-Rs[4]))*fc;
+				g14[j1]+=exp(-eta[2]*(rm-Rs[5])*(rm-Rs[5]))*fc;
+				
+				g15[j1]+=exp(-eta[3]*(rm-Rs[0])*(rm-Rs[0]))*fc;
+				g16[j1]+=exp(-eta[3]*(rm-Rs[1])*(rm-Rs[1]))*fc;
+				g17[j1]+=exp(-eta[3]*(rm-Rs[2])*(rm-Rs[2]))*fc;
+				g18[j1]+=exp(-eta[3]*(rm-Rs[3])*(rm-Rs[3]))*fc;
+				g19[j1]+=exp(-eta[3]*(rm-Rs[4])*(rm-Rs[4]))*fc;
+				
+				g20[j1]+=exp(-eta[4]*(rm-Rs[0])*(rm-Rs[0]))*fc;
+				g21[j1]+=exp(-eta[4]*(rm-Rs[1])*(rm-Rs[1]))*fc;
+				g22[j1]+=exp(-eta[4]*(rm-Rs[2])*(rm-Rs[2]))*fc;
+				g23[j1]+=exp(-eta[4]*(rm-Rs[3])*(rm-Rs[3]))*fc;
+				g24[j1]+=exp(-eta[4]*(rm-Rs[4])*(rm-Rs[4]))*fc;
 				
 			} 
 		}
@@ -487,29 +527,40 @@ void ComputeTraining()
 						VVAdd (mol[j3].ra, w3);
 						uSum += (cr + 1./3.) * er;
 						atomPotential[j1]+=(cr + 1./3.) * er;
-						theta=cr/rm13/rm12;
+						theta=acos(cr/rm13/rm12);
+						if(theta>ThetaMax)ThetaMax=theta;
+						if(theta<ThetaMin)ThetaMin=theta;
 						VecR dr23;
 						VSub (dr23, mol[j2].r, mol[j3].r); 
 						rm23= sqrt(VLenSq (dr23));
 						fc=(1.0+0.5*cos(3.1419*rm12/rCut))*(1.0+0.5*cos(3.1419*rm13/rCut))*(1.0+0.5*cos(3.1419*rm23/rCut));
-						g2[j1]+=pow((1.0+lambda*cos(theta)),zeta) * exp(-mu*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g4[j1]+=pow((1.0+lambda2*cos(theta)),zeta2) * exp(-mu2*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g6[j1]+=pow((1.0+lambda3*cos(theta)),zeta3) * exp(-mu3*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g8[j1]+=pow((1.0+lambda4*cos(theta)),zeta4) * exp(-mu7*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g10[j1]+=pow((1.0+lambda5*cos(theta)),zeta5) * exp(-mu3*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g12[j1]+=pow((1.0+lambda6*cos(theta)),zeta6) * exp(-mu4*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g14[j1]+=pow((1.0+lambda7*cos(theta)),zeta7) * exp(-mu5*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g16[j1]+=pow((1.0+lambda2*cos(theta)),zeta5) * exp(-mu6*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g18[j1]+=pow((1.0+lambda3*cos(theta)),zeta6) * exp(-mu7*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g20[j1]+=pow((1.0+lambda*cos(theta)),zeta) * exp(-mu*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g22[j1]+=pow((1.0+lambda2*cos(theta)),zeta2) * exp(-mu2*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g24[j1]+=pow((1.0+lambda3*cos(theta)),zeta3) * exp(-mu3*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g26[j1]+=pow((1.0+lambda4*cos(theta)),zeta4) * exp(-mu7*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g28[j1]+=pow((1.0+lambda5*cos(theta)),zeta5) * exp(-mu3*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g30[j1]+=pow((1.0+lambda6*cos(theta)),zeta6) * exp(-mu4*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g32[j1]+=pow((1.0+lambda7*cos(theta)),zeta7) * exp(-mu5*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g34[j1]+=pow((1.0+lambda2*cos(theta)),zeta5) * exp(-mu6*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-						g36[j1]+=pow((1.0+lambda3*cos(theta)),zeta6) * exp(-mu7*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g25[j1]+=pow(2,1-zeta[0])*pow((1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[0]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g26[j1]+=pow(2,1-zeta[0])*pow((1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[1]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g27[j1]+=pow(2,1-zeta[0])*pow((1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g28[j1]+=pow(2,1-zeta[0])*pow((1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[3]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g29[j1]+=pow(2,1-zeta[1])*pow((1.0+lambda[0]*cos(theta)),zeta[1]) * exp(-eta[0]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g30[j1]+=pow(2,1-zeta[1])*pow((1.0+lambda[0]*cos(theta)),zeta[1]) * exp(-eta[1]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g31[j1]+=pow(2,1-zeta[1])*pow((1.0+lambda[0]*cos(theta)),zeta[1]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g32[j1]+=pow(2,1-zeta[1])*pow((1.0+lambda[0]*cos(theta)),zeta[1]) * exp(-eta[3]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g33[j1]+=pow(2,1-zeta[2])*pow((1.0+lambda[0]*cos(theta)),zeta[2]) * exp(-eta[0]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g34[j1]+=pow(2,1-zeta[2])*pow((1.0+lambda[0]*cos(theta)),zeta[2]) * exp(-eta[1]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g35[j1]+=pow(2,1-zeta[2])*pow((1.0+lambda[0]*cos(theta)),zeta[2]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g36[j1]+=pow(2,1-zeta[2])*pow((1.0+lambda[0]*cos(theta)),zeta[2]) * exp(-eta[3]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						
+						//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+						
+						g37[j1]+=pow(2,1-zeta[0])*pow((1.0+lambda[1]*cos(theta)),zeta[0]) * exp(-eta[0]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g38[j1]+=pow(2,1-zeta[0])*pow((1.0+lambda[1]*cos(theta)),zeta[0]) * exp(-eta[1]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g39[j1]+=pow(2,1-zeta[0])*pow((1.0+lambda[1]*cos(theta)),zeta[0]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g40[j1]+=pow(2,1-zeta[0])*pow((1.0+lambda[1]*cos(theta)),zeta[0]) * exp(-eta[3]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g41[j1]+=pow(2,1-zeta[1])*pow((1.0+lambda[1]*cos(theta)),zeta[1]) * exp(-eta[0]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g42[j1]+=pow(2,1-zeta[1])*pow((1.0+lambda[1]*cos(theta)),zeta[1]) * exp(-eta[1]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g43[j1]+=pow(2,1-zeta[1])*pow((1.0+lambda[1]*cos(theta)),zeta[1]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g44[j1]+=pow(2,1-zeta[1])*pow((1.0+lambda[1]*cos(theta)),zeta[1]) * exp(-eta[3]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g45[j1]+=pow(2,1-zeta[2])*pow((1.0+lambda[1]*cos(theta)),zeta[2]) * exp(-eta[0]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g46[j1]+=pow(2,1-zeta[2])*pow((1.0+lambda[1]*cos(theta)),zeta[2]) * exp(-eta[1]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g47[j1]+=pow(2,1-zeta[2])*pow((1.0+lambda[1]*cos(theta)),zeta[2]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
+						g48[j1]+=pow(2,1-zeta[2])*pow((1.0+lambda[1]*cos(theta)),zeta[2]) * exp(-eta[3]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
 					}
 				}
 			}
@@ -522,6 +573,7 @@ void ComputeTraining()
 	}
 	
 	printf("atomPotential sum=%f localSum=%f\n",atomUSum,uSum);
+	printf("minTheta=%f maxTheta=%f\n",180/3.14159*ThetaMin,180/3.14159*ThetaMax);
 	WriteOutTrainingData();
 }
 
@@ -733,13 +785,15 @@ void WriteOutTrainingData()
 	int n;
 	
     for (n = 0; n < nMol; n ++) {
-		fprintf (trainingData, "%8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f\n", 
+		fprintf (trainingData, "%8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f %8.6f\n", 
 				 g1[n], g2[n],g3[n],g4[n],g5[n],g6[n], 
 				 g7[n], g8[n],g9[n],g10[n],g11[n],g12[n], 
 				 g13[n], g14[n],g15[n],g16[n],g17[n],g18[n], 
 				 g19[n], g20[n],g21[n],g22[n],g23[n],g24[n], 
 				 g25[n], g26[n],g27[n],g28[n],g29[n],g30[n], 
-				 g31[n], g32[n],g33[n],g34[n],g35[n],g36[n], 
+				 g31[n], g32[n],g33[n],g34[n],g35[n],g36[n],
+				 g37[n], g38[n],g39[n],g40[n],g41[n],g42[n], 
+				 g43[n], g44[n],g45[n],g46[n],g47[n],g48[n],
 				 
 				 atomPotential[n]);
 	}
