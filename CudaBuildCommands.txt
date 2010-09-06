@@ -1,5 +1,5 @@
 for mac:
-nvcc -I "/Developer/GPU Computing/C/common/inc" -I ~/Desktop/S3MD/mdcode -cuda vectorAdd.cu ./mdcode/pr_12_1.c -O3 -m32
+nvcc -I "/Developer/GPU Computing/C/common/inc" -I ~/Desktop/S3MD/mdcode -cuda vectorAdd.cu ./mdcode/pr_12_1.c -O3 -m32 -pg -arch=sm_13
 g++ -I "/Developer/GPU Computing/C/common/inc" -I ~/Desktop/S3MD/mdcode vectorAdd.cu.cpp -L/usr/local/cuda/lib/ ./mdcode/pr_12_1.c -O3 -m32 -o testMD -lcudart
 
 

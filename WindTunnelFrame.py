@@ -81,16 +81,18 @@ flag, and the actual resizing of the figure is triggered by an Idle event."""
             self.axes.plot(self.x[0][1:],self.y[0][1:], 'rv',linestyle='--',linewidth=4.0)
             self.axes.plot(self.x[1][1:],self.y[1][1:], 'bo',linestyle=':',linewidth=2.0)
             self.axes.plot(self.x[2][1:],self.y[2][1:], 'g.',linestyle='-',linewidth=1.0)
-            self.axes.legend(('Base','ANN','ANN-GPU'),loc=2,fancybox=True)
+            self.axes.legend(('Base','ANN','ANN-GPU'),loc='lower right',fancybox=True)
             self.axes.set_xlabel('Timestep')
             self.axes.set_ylabel=('Pressure')
-            ticks=[0.98*self.y[2].max(),self.y[2].max(),1.02*self.y[2].max()]
-            self.axes.set_ylim((ticks[0],ticks[2]))
-            strLabels=['%.3f'%(0.98*ticks[0]),
-                       '%.3f'%ticks[1],
-                       '%.3f'%(1.02*ticks[2])]
-            self.axes.set_yticklabels(strLabels)
-            self.axes.set_yticks(ticks)
+            self.axes.set_xlim((0,3000))
+            self.axes.set_ylim((0,-2.0))
+            #ticks=[0.98*self.y[2].max(),self.y[2].max(),1.02*self.y[2].max()]
+            #self.axes.set_ylim((ticks[0],ticks[2]))
+            #strLabels=['%.3f'%(0.98*ticks[0]),
+            #           '%.3f'%ticks[1],
+            #           '%.3f'%(1.02*ticks[2])]
+            #self.axes.set_yticklabels(strLabels)
+            #self.axes.set_yticks(ticks)
             self.canvas.draw()
             
 class BarPanel (wx.Panel):
@@ -174,16 +176,16 @@ class BarPanel (wx.Panel):
 from threading import Thread
 class SimulationWorker(Thread):
     """Worker Thread Class."""
-    def __init__(self, notify_window,processNum):
+    def __init__(self, notify_window,processName):
         """Init Worker Thread Class."""
         Thread.__init__(self)
-        self.processNum = processNum
+        self.processName = processName
        
     def run(self):
         """Run Worker Thread."""
-        inputName='./mdcode/process%d'%self.processNum
-        fileName='./mdcode/testData%d.txt'%self.processNum
-        exeName='./mdcode/testMD%d'%self.processNum
+        inputName='/Users/MarkB/Desktop/S3MD/mdcode/%s'%self.processName
+        fileName='/Users/MarkB/Desktop/S3MD/mdcode/testData%s.txt'%self.processName
+        exeName='/Users/MarkB/Desktop/S3MD/mdcode/%s'%self.processName
         fileptr=open(fileName,'w')
         
         self.p=subprocess.Popen([exeName,inputName],executable=exeName,stdout=fileptr)
@@ -347,21 +349,21 @@ class WindTunnelFrame(wx.Frame):
         if self.checkUpdates==True:
             if time.time()-self.lastUpdateTime > 0.5 : 
                 self.counter+=1
-                in1=open('./mdcode/testData1.txt','r')
+                in1=open('/Users/MarkB/Desktop/S3MD/mdcode/testDataorigMD.txt','r')
                 data1=in1.readlines()
                 in1.close()
                 if len(data1)>0:
                     A=array( [ [float(line.split()[0]),float(line.split()[3])+float(line.split()[5])] for line in data1])
                 else:
                     A=zeros((1,2))
-                in2=open('./mdcode/testData2.txt','r')
+                in2=open('/Users/MarkB/Desktop/S3MD/mdcode/testDataANNMD.txt','r')
                 data2=in2.readlines()
                 in2.close()
                 if len(data2)>0:
                     B=array( [ [float(line.split()[0]),float(line.split()[3])+float(line.split()[5])] for line in data2])
                 else:
                     B=zeros((1,2))
-                in3=open('./mdcode/testData3.txt','r')
+                in3=open('/Users/MarkB/Desktop/S3MD/mdcode/testDataGPUANNMD.txt','r')
                 data3=in3.readlines()
                 in3.close()
                 if len(data3)>0:
@@ -441,9 +443,9 @@ class WindTunnelFrame(wx.Frame):
             del self.simulationWorkers
             
         self.simulationWorkers = [
-            SimulationWorker(self,1),
-            SimulationWorker(self,2),
-            SimulationWorker(self,3)
+            SimulationWorker(self,'origMD'),
+            SimulationWorker(self,'ANNMD'),
+            SimulationWorker(self,'GPUANNMD')
         ]
         self.simulationWorkers[0].start()
         self.simulationWorkers[1].start()
