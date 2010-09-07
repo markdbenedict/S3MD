@@ -9,3 +9,6 @@ nvcc -I "/Developer/GPU Computing/C/common/inc" -I ~/Desktop/S3MD/mdcode vectorA
 for RHEL:
 nvcc -I ~/NVIDIA_GPU_Computing_SDK/C/common/inc -I~/Desktop/S3MD/mdcode -cuda vectorAdd.cu ./mdcode/pr_12_1.c -O3 -pg -arch=sm_13
 g++ -I ~/NVIDIA_GPU_Computing_SDK/C/common/inc -L/usr/local/cuda/lib64 -I~/Desktop/S3MD/mdcode vectorAdd.cu.cpp ./mdcode/pr_12_1.c -O3 -o testMD -lcudart
+
+for mac, with all code in .cu file
+nvcc -I ~/NVIDIA_GPU_Computing_SDK/C/common/inc -I ~/Desktop/S3MD/mdcode vectorAdd.cu -arch=sm_13 -o ./mdcode/GPUANNMD

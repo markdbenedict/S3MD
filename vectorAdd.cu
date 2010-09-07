@@ -78,10 +78,10 @@ int main (int argc, char **argv)
   SetParams ();
   SetupJob ();
   SetupTraining();
-  printf("region just before Alloc is %f,%f,%f\n",region.x,region.y,region.z);
+  //printf("region just before Alloc is %f,%f,%f\n",region.x,region.y,region.z);
   AllocGPUMemory(nebrTabMax, nebrTabLen, nMol,region.x,region.y,region.z,initUcell.x,initUcell.x,initUcell.x);  
   
-  printf("after init x=%f,y=%f,z=%f\n",mol[100].r.x,mol[100].r.y,mol[100].r.z);
+  //printf("after init x=%f,y=%f,z=%f\n",mol[100].r.x,mol[100].r.y,mol[100].r.z);
   moreCycles = 1;
   while (moreCycles) {
     SingleStep ();
@@ -92,7 +92,7 @@ int main (int argc, char **argv)
 
 void SingleStep ()
 {
-     printf("region in .C is %f,%f,%f\n",region.x,region.y,region.z);
+  //printf("region in .C is %f,%f,%f\n",region.x,region.y,region.z);
   ++ stepCount;
   timeNow = stepCount * deltaT;
   if (nebrNow) {
@@ -104,12 +104,12 @@ void SingleStep ()
   //ComputeTraining();
   doForceIterartion(rCut,mol,uSum);
   //ComputeForces();
-  printf("atomPotential in .C after zero=%f\n",uSum);
+  //printf("atomPotential in .C after zero=%f\n",uSum);
   
   ApplyThermostat ();
   CorrectorStep ();
   ApplyBoundaryCond ();
-  printf("step %d uSum in .C=%f\n\n",stepCount,uSum);
+  //printf("step %d uSum in .C=%f\n\n",stepCount,uSum);
   EvalProps ();
   if (stepCount % stepAdjustTemp == 0) AdjustTemp ();
   AccumProps (1);
@@ -137,8 +137,8 @@ void SetupJob ()
 void SetParams ()
 {
   VSCopy (region, 1. / pow (density / 8., 1./3.), initUcell);
-     printf("region initialized to %f,%f,%f\n",region.x,region.y,region.z);
-      printf("initUcell is %d,%d,%d\n",initUcell.x,initUcell.y,initUcell.z);
+     //printf("region initialized to %f,%f,%f\n",region.x,region.y,region.z);
+      //printf("initUcell is %d,%d,%d\n",initUcell.x,initUcell.y,initUcell.z);
   nMol = 8 * VProd (initUcell);
   velMag = sqrt (NDIM * (1. - 1. / nMol) * temperature);
   VSCopy (cells, 1. / (rCut + rNebrShell), region);
@@ -379,7 +379,8 @@ void ComputeTraining()
                        g2[j1]+=exp(-eta[0]*(rm-Rs[5])*(rm-Rs[5]))*fc;
                        
                        g3[j1]+=exp(-eta[1]*(rm-Rs[0])*(rm-Rs[0]))*fc;
-                       g4[j1]+=exp(-eta[4]*(rm-Rs[1])*(rm-Rs[1]))*fc;
+                       g4[j1]+=exp(-
+eta[4]*(rm-Rs[1])*(rm-Rs[1]))*fc;
                        g5[j1]+=exp(-eta[1]*(rm-Rs[2])*(rm-Rs[2]))*fc;
                        g6[j1]+=exp(-eta[1]*(rm-Rs[4])*(rm-Rs[4]))*fc;
                        g7[j1]+=exp(-eta[4]*(rm-Rs[3])*(rm-Rs[3]))*fc;
@@ -428,7 +429,8 @@ void ComputeTraining()
 						VecR dr23;
 						VSub (dr23, mol[j2].r, mol[j3].r); 
 						rm23= sqrt(VLenSq (dr23));
-						fc=(1.0+0.5*cos(3.1419*rm12/rCut))*(1.0+0.5*cos(3.1419*rm13/rCut))*(1.0+0.5*cos(3.1419*rm23/rCut));
+					
+	fc=(1.0+0.5*cos(3.1419*rm12/rCut))*(1.0+0.5*cos(3.1419*rm13/rCut))*(1.0+0.5*cos(3.1419*rm23/rCut));
 						g25[j1]+=pow((real)2,1-zeta[0])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[0]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
 						g26[j1]+=pow((real)2,1-zeta[0])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[1]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
 						g27[j1]+=pow((real)2,1-zeta[0])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
@@ -466,6 +468,7 @@ void ComputeTraining()
 
 void PredictorStep ()
 {
+
   real cr[] = {19.,-10.,3.}, cv[] = {27.,-22.,7.}, div = 24., wr, wv;
   int n;
 
@@ -744,7 +747,7 @@ void AllocGPUMemory(int nebrTabMax, int nebrTabLen,int inNMol,double rx,double r
     h_Region.x=rx;
     h_Region.y=rx;
     h_Region.z=rx;
-    cudaDeviceProp prop;
+    /*cudaDeviceProp prop;
     int Dev;
     cudaGetDevice(&Dev);
     cudaGetDeviceProperties(&prop,Dev);
@@ -757,20 +760,20 @@ void AllocGPUMemory(int nebrTabMax, int nebrTabLen,int inNMol,double rx,double r
     
     printf("region is %f,%f,%f\n",rx,ry,rz);
     printf("h_Region is %f,%f,%f\n",h_Region.x,h_Region.y,h_Region.z);
-    printf("unitCell is %d,%d,%d\n",h_UCell.x,h_UCell.y,h_UCell.z);
+    printf("unitCell is %d,%d,%d\n",h_UCell.x,h_UCell.y,h_UCell.z);*/
     h_atomPotential=(real*)malloc(sizeof(real)*h_nMol);
-    cutilSafeCall(cudaMalloc((void**)&d_nebrTabPtr, (h_nMol+1)*sizeof(int)));
-    cutilSafeCall(cudaMalloc((void**)&d_nebrTab, nebrTabMax*sizeof(int)));
-    cutilSafeCall(cudaMalloc((void**)&d_mol, h_nMol*sizeof(Mol)));
-    cutilSafeCall(cudaMalloc((void**)&d_g, 15*h_nMol*sizeof(real)));
-    cutilSafeCall(cudaMalloc((void**)&d_atomPotential, h_nMol*sizeof(real)));
-    cutilSafeCall(cudaMalloc((void**)&d_indexSum,sizeof(int)));
-    cutilSafeCall(cudaMalloc((void**)&d_region,sizeof(VecR)));
-    cutilSafeCall(cudaMemcpy(d_region, &h_Region, sizeof(VecR), cudaMemcpyHostToDevice));
+    cudaMalloc((void**)&d_nebrTabPtr, (h_nMol+1)*sizeof(int));
+    cudaMalloc((void**)&d_nebrTab, nebrTabMax*sizeof(int));
+    cudaMalloc((void**)&d_mol, h_nMol*sizeof(Mol));
+    cudaMalloc((void**)&d_g, 15*h_nMol*sizeof(real));
+    cudaMalloc((void**)&d_atomPotential, h_nMol*sizeof(real));
+    cudaMalloc((void**)&d_indexSum,sizeof(int));
+    cudaMalloc((void**)&d_region,sizeof(VecR));
+    cudaMemcpy(d_region, &h_Region, sizeof(VecR), cudaMemcpyHostToDevice);
     VecR testRegion;
-    cutilSafeCall(cudaMemcpy(&testRegion, d_region, sizeof(VecR), cudaMemcpyDeviceToHost));
-    printf("testRegion is %f,%f,%f\n",testRegion.x,testRegion.y,testRegion.z);
-    cutilSafeCall(cudaMalloc((void**)&d_accum, h_nMol*sizeof(real)));    
+    cudaMemcpy(&testRegion, d_region, sizeof(VecR), cudaMemcpyDeviceToHost);
+    //printf("testRegion is %f,%f,%f\n",testRegion.x,testRegion.y,testRegion.z);
+    cudaMalloc((void**)&d_accum, h_nMol*sizeof(real));    
 }
 
 void UpdateGPUNeighbors(int* nebrTabPtr,int* nebrTab,int nebrTabMax)
@@ -779,7 +782,7 @@ void UpdateGPUNeighbors(int* nebrTabPtr,int* nebrTab,int nebrTabMax)
     cudaMemcpy(d_nebrTab, nebrTab, nebrTabMax*sizeof(int), cudaMemcpyHostToDevice);
 }
 
-__global__ void ZeroAccumulators(Mol* inMol,real* inAtomPotential,int inNumMol,real* accum,int* inCount)
+__global__ void ZeroAccumulators(Mol* inMol,real* inAtomPotential,int inNumMol)//real* accum,int* inCount)
 {
   int n=blockIdx.x;//8*gridDim.x *gridDim.x * blockIdx.x + 8*gridDim.y*blockIdx.y + threadIdx.x;
   if(n < inNumMol)
@@ -789,12 +792,12 @@ __global__ void ZeroAccumulators(Mol* inMol,real* inAtomPotential,int inNumMol,r
     inMol[n].ra.y=0.;
     inMol[n].ra.z=0.;
     inAtomPotential[n]=0.;
-    accum[n]=0.;
+    //accum[n]=0.;
     
   }
 }
 
-__global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTabPtr,int*inNebrTab,VecR* inRegion,real inRCut,int inNMol,int* inCounter,real* accum)
+__global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTabPtr,int*inNebrTab,VecR* inRegion,real inRCut,int inNMol) //int* inCounter,real* accum)
 {
     VecR dr, dr12, dr13, w2, w3;
     real aCon = 7.0496, bCon = 0.60222, cr, er, fcVal,
@@ -811,8 +814,8 @@ __global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTab
     int nCount=0;
     if(CURR<inNMol)
     {
-        atomicMax(inCounter,CURR);
-        accum[CURR]=0;
+        //atomicMax(inCounter,CURR);
+        //accum[CURR]=0;
         rrCut = inRCut*inRCut - 0.001;
         for (m2 = inNebrTabPtr[CURR]; m2 < inNebrTabPtr[CURR + 1]; m2 ++)
         {
@@ -833,7 +836,7 @@ __global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTab
                 if(dr.z< -0.5 * 25.490652)dr.z += 25.490652;
                 
                 rr = VLenSq(dr);
-                if(rr<0.1)accum[CURR]=999999;
+                //if(rr<0.1)accum[CURR]=999999;
                 if (rr < rrCut && rr>.64)
                 {
                      //calculate if i,j conribution to G1(i)and add it to sum for i
@@ -1013,21 +1016,21 @@ void doForceIterartion(double inRCut,Mol* inMol,double &outUSum)
     //clear out accumulators
     
     
-    real* theAccum=(real*)malloc(h_nMol*sizeof(real));
-    cutilSafeCall(cudaMemcpy(d_indexSum,&counter, sizeof(int), cudaMemcpyHostToDevice));
-    cutilSafeCall(cudaMemcpy(d_mol,inMol,h_nMol*sizeof(Mol), cudaMemcpyHostToDevice));
+    //real* theAccum=(real*)malloc(h_nMol*sizeof(real));
+    //cudaMemcpy(d_indexSum,&counter, sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_mol,inMol,h_nMol*sizeof(Mol), cudaMemcpyHostToDevice);
     int blocks=8000;
     int threads=1;
-    ZeroAccumulators<<<blocks,threads>>>(d_mol,d_atomPotential,8000,d_accum,d_indexSum);
-    cutilSafeCall(cudaMemcpy(theAccum, d_accum, h_nMol*sizeof(real), cudaMemcpyDeviceToHost));
+    ZeroAccumulators<<<blocks,threads>>>(d_mol,d_atomPotential,8000);//d_accum,d_indexSum);
+    //cudaMemcpy(theAccum, d_accum, h_nMol*sizeof(real), cudaMemcpyDeviceToHost);
     sum=0;
-    for(n=0;n<h_nMol;n++) sum+=theAccum[n];
-    printf("Accum after zero=%f \n",sum/h_nMol);
+    //for(n=0;n<h_nMol;n++) sum+=theAccum[n];
+    //printf("Accum after zero=%f \n",sum/h_nMol);
     
-    cutilSafeCall(cudaMemcpy(h_atomPotential, d_atomPotential, h_nMol*sizeof(real), cudaMemcpyDeviceToHost));
+    //cudaMemcpy(h_atomPotential, d_atomPotential, h_nMol*sizeof(real), cudaMemcpyDeviceToHost);
     localUSum=0;
-    for(n=0;n<h_nMol;n++) localUSum+=h_atomPotential[n];
-    printf("localUSum after zero=%f\n",localUSum/h_nMol);
+    //for(n=0;n<h_nMol;n++) localUSum+=h_atomPotential[n];
+    //printf("localUSum after zero=%f\n",localUSum/h_nMol);
     
     //cutilSafeCall(cudaMemcpy(h_atomPotential, d_atomPotential, h_nMol*sizeof(real), cudaMemcpyDeviceToHost));
     //cudaMemcpy(&counter, d_indexSum, sizeof(int), cudaMemcpyDeviceToHost);
@@ -1042,13 +1045,13 @@ void doForceIterartion(double inRCut,Mol* inMol,double &outUSum)
     cudaThreadSynchronize();    
     
     counter=0;
-    cutilSafeCall(cudaMemcpy(d_indexSum,&counter, sizeof(int), cudaMemcpyHostToDevice));
-    ComputeForcesGPU<<<blocks,threads>>>(d_mol,d_atomPotential, d_nebrTabPtr,d_nebrTab,d_region,inRCut,h_nMol,d_indexSum,d_accum);
+    //cudaMemcpy(d_indexSum,&counter, sizeof(int), cudaMemcpyHostToDevice);
+    ComputeForcesGPU<<<blocks,threads>>>(d_mol,d_atomPotential, d_nebrTabPtr,d_nebrTab,d_region,inRCut,h_nMol);//d_indexSum,d_accum);
 
-    cutilSafeCall(cudaMemcpy(inMol, d_mol, h_nMol*sizeof(Mol), cudaMemcpyDeviceToHost));
-    cutilSafeCall(cudaMemcpy(h_atomPotential, d_atomPotential, h_nMol*sizeof(real), cudaMemcpyDeviceToHost));
-    cutilSafeCall(cudaMemcpy(theAccum, d_accum, h_nMol*sizeof(real), cudaMemcpyDeviceToHost));
-    cudaMemcpy(&counter, d_indexSum, sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(inMol, d_mol, h_nMol*sizeof(Mol), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_atomPotential, d_atomPotential, h_nMol*sizeof(real), cudaMemcpyDeviceToHost);
+    //cudaMemcpy(theAccum, d_accum, h_nMol*sizeof(real), cudaMemcpyDeviceToHost));
+    //cudaMemcpy(&counter, d_indexSum, sizeof(int), cudaMemcpyDeviceToHost);
     
     sum=0;
     j=0;
@@ -1074,17 +1077,17 @@ void doForceIterartion(double inRCut,Mol* inMol,double &outUSum)
     printf("after forces max r=%f\n",maxR);
     */
     
-    printf("sum of iterations=%d\n",counter);
+    //printf("sum of iterations=%d\n",counter);
     sum=0;
-    for(n=0;n<h_nMol;n++) sum+=theAccum[n];
-    printf("Accum after forces=%f\n",sum/999999);
+    //for(n=0;n<h_nMol;n++) sum+=theAccum[n];
+    //printf("Accum after forces=%f\n",sum/999999);
     localUSum=0;
     for(n=0;n<h_nMol;n++) localUSum+=h_atomPotential[n];
-    printf("localUSum after forces=%f\n",localUSum/h_nMol);
-    outUSum=localUSum/h_nMol;
-    printf("uSum after zero=%f\n",outUSum);
+    //printf("localUSum after forces=%f\n",localUSum/h_nMol);
+    outUSum=localUSum;///h_nMol;
+    //printf("uSum after zero=%f\n",outUSum);
   
-    free(theAccum);
+    //free(theAccum);
 
 }
 
