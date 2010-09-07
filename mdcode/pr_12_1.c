@@ -33,7 +33,7 @@ int stepAdjustTemp;
 real *histRdf, rangeRdf,*atomPotential,*g1,*g2,*g3,*g4,*g5,*g6;
 real *g7,*g8,*g9,*g10;
 real *g25,*g26,*g27,*g28,*g29,*g30;
-
+real *rCutTemp;
 int countRdf, limitRdf, sizeHistRdf, stepRdf;
 
 
@@ -58,11 +58,11 @@ NameList nameList[] = {
 };
 
 void SetupTraining();
-void  ComputeTraining();
+void ComputeTraining();
 void WriteOutTrainingData();
-extern void doForceIterartion();
-extern void AllocGPUMemory();
-void UpdateGPUNeighbors();
+void doForceIterartion(double inRCut,Mol* mol,double& outUSum);
+void AllocGPUMemory(int nebrTabMax, int nebrTabLen,int nMol,VecR region,VecI inUcell);
+void UpdateGPUNeighbors(int* nebrTabPtr,int* nebrTab,int nebrTabMax);
 
 int main (int argc, char **argv)
 {
@@ -78,7 +78,7 @@ int main (int argc, char **argv)
   SetParams ();
   SetupJob ();
   SetupTraining();
-  AllocGPUMemory();  
+  AllocGPUMemory(nebrTabMax, nebrTabLen, nMol,region,initUcell);  
   
   //printf("numAtoms=%d",nMol);
   moreCycles = 1;
@@ -99,15 +99,16 @@ void SingleStep ()
     BuildNebrList ();
   }
   PredictorStep ();
-  //printf("Starting Step\n");
-  ComputeForces ();
-
-  //printf("\n");
+  //ComputeForces();
   //ComputeTraining();
+  doForceIterartion(rCut,mol,uSum);
+
+  printf("atomPotential in .C after zero=%f\n",uSum/nMol);
+  
   ApplyThermostat ();
   CorrectorStep ();
   ApplyBoundaryCond ();
-  printf("uSum in .C=%f\n",uSum/nMol);
+  printf("step %d uSum in .C=%f\n\n",stepCount,uSum/nMol);
   EvalProps ();
   if (stepCount % stepAdjustTemp == 0) AdjustTemp ();
   AccumProps (1);
@@ -228,7 +229,7 @@ void BuildNebrList ()
     }
   }
   nebrTabPtr[nMol] = nebrTabLen;
-  UpdateGPUNeighbors();
+  UpdateGPUNeighbors(nebrTabPtr,nebrTab, nebrTabMax);
 }
 
 void ComputeForces ()
@@ -301,48 +302,6 @@ void ComputeForces ()
   }
 }
 
-
-#define PCR4(r, ro, v, a, a1, a2, t)                        \
-   r.t = ro.t + deltaT * v.t +                              \
-   wr * (cr[0] * a.t + cr[1] * a1.t + cr[2] * a2.t)
-#define PCV4(r, ro, v, a, a1, a2, t)                        \
-   v.t = (r.t - ro.t) / deltaT +                            \
-   wv * (cv[0] * a.t + cv[1] * a1.t + cv[2] * a2.t)
-
-#define PR(t)                                               \
-   PCR4 (mol[n].r, mol[n].r, mol[n].rv,                     \
-   mol[n].ra, mol[n].ra1, mol[n].ra2, t)
-#define PRV(t)                                              \
-   PCV4 (mol[n].r, mol[n].ro, mol[n].rv,                    \
-   mol[n].ra, mol[n].ra1, mol[n].ra2, t)
-#define CR(t)                                               \
-   PCR4 (mol[n].r, mol[n].ro, mol[n].rvo,                   \
-   mol[n].ra, mol[n].ra1, mol[n].ra2, t)
-#define CRV(t)                                              \
-   PCV4 (mol[n].r, mol[n].ro, mol[n].rv,                    \
-   mol[n].ra, mol[n].ra1, mol[n].ra2, t)
-
-void PredictorStep ()
-{
-  real cr[] = {19.,-10.,3.}, cv[] = {27.,-22.,7.}, div = 24., wr, wv;
-  int n;
-
-  wr = Sqr (deltaT) / div;
-  wv = deltaT / div;
-  DO_MOL {
-    mol[n].ro = mol[n].r;
-    mol[n].rvo = mol[n].rv;
-    PR (x);
-    PRV (x);
-    PR (y);
-    PRV (y);
-    PR (z);
-    PRV (z);
-    mol[n].ra2 = mol[n].ra1;
-    mol[n].ra1 = mol[n].ra;
-  }
-}
-
 void ComputeTraining()
 {
 	VecR dr, dr12, dr13, w2, w3;
@@ -357,18 +316,18 @@ void ComputeTraining()
 	int j1, j2, j3, m2, m3, n;
 
 	rrCut = Sqr (rCut) - 0.001;
-     /*float accum=0,accum2=0;
-     DO_MOL
-     {
-      accum+=mol[n].ra.x+mol[n].ra.y+mol[n].ra.z;
-      accum2+=g1[n];//+g2[n]+g3[n]+g4[n];
-     }*/
+     
+     //float accum=0,accum2=0;
+     //DO_MOL
+     //{
+      //accum+=mol[n].ra.x+mol[n].ra.y+mol[n].ra.z;
+      //accum2+=g1[n];//+g2[n]+g3[n]+g4[n];
+    // }
      //printf("Inside Training\n");
      //printf("mol.ra accum=%f\n",accum);
      //printf("g1 accum=%f\n",accum2);
-     
-	//DO_MOL VZero (mol[n].ra);
-	/*DO_MOL
+	DO_MOL VZero (mol[n].ra);
+	DO_MOL
 	{
 		atomPotential[n]=0;
 		g1[n]=0;
@@ -389,42 +348,46 @@ void ComputeTraining()
 		g28[n]=0;
 		g29[n]=0;
 		g30[n]=0;
-	}*/
+	}
 	uSum = 0.;
 	for (j1 = 0; j1 < nMol; j1 ++) { //2body terms
 		for (m2 = nebrTabPtr[j1]; m2 < nebrTabPtr[j1 + 1]; m2 ++) {
 			j2 = nebrTab[m2];
-			VSub (dr, mol[j1].r, mol[j2].r);
-			VWrapAll (dr);
-			rr = VLenSq (dr);
-			if (rr < rrCut) {
-				//calculate if i,j conribution to G1(i)and add it to sum for i
-				rm = sqrt (rr);
-				er = exp (1. / (rm - rCut));
-				ri = 1. / rm;
-				ri3 = Cube (ri);
-				fcVal = aCon * (4. * bCon * Sqr (ri3) +
-								(bCon * ri3 * ri - 1.) * ri / Sqr (rm - rCut)) * er;
-				VVSAdd (mol[j1].ra, fcVal/2., dr);
-				VVSAdd (mol[j2].ra, - fcVal/2., dr);
-				uSum += aCon * (bCon * ri3 * ri - 1.) * er;
-				atomPotential[j1]+=aCon * (bCon * ri3 * ri - 1.) * er;
-				fc=1.0+0.5*cos(3.1419*rm/rCut);
-				g1[j1]+=exp(-eta[0]*(rm-Rs[0])*(rm-Rs[0]))*fc;
-				g2[j1]+=exp(-eta[0]*(rm-Rs[5])*(rm-Rs[5]))*fc;
-				
-				g3[j1]+=exp(-eta[1]*(rm-Rs[0])*(rm-Rs[0]))*fc;
-				g4[j1]+=exp(-eta[4]*(rm-Rs[1])*(rm-Rs[1]))*fc;
-				g5[j1]+=exp(-eta[1]*(rm-Rs[2])*(rm-Rs[2]))*fc;
-				g6[j1]+=exp(-eta[1]*(rm-Rs[4])*(rm-Rs[4]))*fc;
-				g7[j1]+=exp(-eta[4]*(rm-Rs[3])*(rm-Rs[3]))*fc;
-				g8[j1]+=exp(-eta[1]*(rm-Rs[5])*(rm-Rs[5]))*fc;
-				
-				g9[j1]+=exp(-eta[2]*(rm-Rs[0])*(rm-Rs[0]))*fc;
-				g10[j1]+=exp(-eta[2]*(rm-Rs[3])*(rm-Rs[3]))*fc;
-				
-			} 
-		}
+               if(j1<j2)
+               {
+                  VSub (dr, mol[j1].r, mol[j2].r);
+                  VWrapAll (dr);
+                  rr = VLenSq (dr);
+                  if (rr < rrCut)
+                  {
+                       //calculate if i,j conribution to G1(i)and add it to sum for i
+                       rm = sqrt (rr);
+                       er = exp (1. / (rm - rCut));
+                       ri = 1. / rm;
+                       ri3 = Cube (ri);
+                       fcVal = aCon * (4. * bCon * Sqr (ri3) +
+                                           (bCon * ri3 * ri - 1.) * ri / Sqr (rm - rCut)) * er;
+                       VVSAdd (mol[j1].ra, fcVal, dr);
+                       VVSAdd (mol[j2].ra, - fcVal, dr);
+                       uSum += aCon * (bCon * ri3 * ri - 1.) * er;
+                       atomPotential[j1]+=aCon * (bCon * ri3 * ri - 1.) * er;
+                       fc=1.0+0.5*cos(3.1419*rm/rCut);
+                       g1[j1]+=exp(-eta[0]*(rm-Rs[0])*(rm-Rs[0]))*fc;
+                       g2[j1]+=exp(-eta[0]*(rm-Rs[5])*(rm-Rs[5]))*fc;
+                       
+                       g3[j1]+=exp(-eta[1]*(rm-Rs[0])*(rm-Rs[0]))*fc;
+                       g4[j1]+=exp(-eta[4]*(rm-Rs[1])*(rm-Rs[1]))*fc;
+                       g5[j1]+=exp(-eta[1]*(rm-Rs[2])*(rm-Rs[2]))*fc;
+                       g6[j1]+=exp(-eta[1]*(rm-Rs[4])*(rm-Rs[4]))*fc;
+                       g7[j1]+=exp(-eta[4]*(rm-Rs[3])*(rm-Rs[3]))*fc;
+                       g8[j1]+=exp(-eta[1]*(rm-Rs[5])*(rm-Rs[5]))*fc;
+                       
+                       g9[j1]+=exp(-eta[2]*(rm-Rs[0])*(rm-Rs[0]))*fc;
+                       g10[j1]+=exp(-eta[2]*(rm-Rs[3])*(rm-Rs[3]))*fc;
+                       
+                  }
+                }
+		} 
 	}
 	for (j1 = 0; j1 < nMol; j1 ++) { //3 body terms
 		for (m2 = nebrTabPtr[j1]; m2 < nebrTabPtr[j1 + 1] - 1; m2 ++) {
@@ -475,8 +438,51 @@ void ComputeTraining()
 			}
 		}
 	}
-	uSum /=2.0;
+	//uSum /=2.0;
 }
+
+#define PCR4(r, ro, v, a, a1, a2, t)                        \
+   r.t = ro.t + deltaT * v.t +                              \
+   wr * (cr[0] * a.t + cr[1] * a1.t + cr[2] * a2.t)
+#define PCV4(r, ro, v, a, a1, a2, t)                        \
+   v.t = (r.t - ro.t) / deltaT +                            \
+   wv * (cv[0] * a.t + cv[1] * a1.t + cv[2] * a2.t)
+
+#define PR(t)                                               \
+   PCR4 (mol[n].r, mol[n].r, mol[n].rv,                     \
+   mol[n].ra, mol[n].ra1, mol[n].ra2, t)
+#define PRV(t)                                              \
+   PCV4 (mol[n].r, mol[n].ro, mol[n].rv,                    \
+   mol[n].ra, mol[n].ra1, mol[n].ra2, t)
+#define CR(t)                                               \
+   PCR4 (mol[n].r, mol[n].ro, mol[n].rvo,                   \
+   mol[n].ra, mol[n].ra1, mol[n].ra2, t)
+#define CRV(t)                                              \
+   PCV4 (mol[n].r, mol[n].ro, mol[n].rv,                    \
+   mol[n].ra, mol[n].ra1, mol[n].ra2, t)
+
+void PredictorStep ()
+{
+  real cr[] = {19.,-10.,3.}, cv[] = {27.,-22.,7.}, div = 24., wr, wv;
+  int n;
+
+  wr = Sqr (deltaT) / div;
+  wv = deltaT / div;
+  DO_MOL {
+    mol[n].ro = mol[n].r;
+    mol[n].rvo = mol[n].rv;
+    PR (x);
+    PRV (x);
+    PR (y);
+    PRV (y);
+    PR (z);
+    PRV (z);
+    mol[n].ra2 = mol[n].ra1;
+    mol[n].ra1 = mol[n].ra;
+  }
+}
+
+
 
 
 void CorrectorStep ()
@@ -705,3 +711,7 @@ void WriteOutTrainingData()
 #include "in_errexit.c"
 #include "in_namelist.c"
 
+
+/*
+
+*/

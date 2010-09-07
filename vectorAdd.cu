@@ -88,7 +88,7 @@ typedef struct {
      {-1,-1,1}, {0,-1,1}, {1,-1,1}                            \
    }
 
-
+ 
 // Includes
 #include <stdio.h>
 #include <cutil_inline.h>
@@ -98,90 +98,71 @@ typedef struct {
   VecR r, rv, ra, ra1, ra2, ro, rvo;
 } Mol;
 
-Mol * d_mol;
-extern Mol* mol;
-extern VecI initUcell;
-extern VecR region;
-extern int nMol;
-extern real deltaT, density, rCut, temperature, timeNow, uSum, velMag, vvSum;
-/*
-int moreCycles, nMol, stepAvg, stepCount, stepEquil, stepLimit;
-VecI cells;
-int *cellList;
-real dispHi, rNebrShell;
- */
-extern int *nebrTab, nebrNow, nebrTabFac, nebrTabLen, nebrTabMax;
-extern int *nebrTabPtr;
-extern real *atomPotential,*g1,*g2,*g3,*g4,*g5,*g6;
-extern real *g8,*g9,*g10;
-extern real *g25,*g26,*g27,*g28,*g29,*g30;
 
+
+Mol     * d_mol;
 VecR    *d_region;
 int     *d_nebrTabPtr, *d_nebrTab;
 real    *d_atomPotential,*d_g;
 int     *d_indexSum;
-
+real    *d_accum;
+real    *h_atomPotential;
+int     h_nMol;
+VecI    h_UCell;
 bool noprompt = false;
 
 // Functions
 void Cleanup(void);
-extern void ComputeTraining();
 
-void AllocGPUMemory()
+void AllocGPUMemory(int nebrTabMax, int nebrTabLen,int nMol,VecR region,VecI inUnitCell)
 {
+    h_nMol = nMol;
+    h_UCell=inUnitCell;
     cudaDeviceProp prop;
     int Dev;
     cudaGetDevice(&Dev);
     cudaGetDeviceProperties(&prop,Dev);
-    /*
+    
     printf("ID of current CUDA Device = %d\n",Dev);
     printf("the name of device is %s\n",prop.name);
     printf("compute capability %d.%d\n",prop.major,prop.minor);
     printf("inside .cu nMol=%d\n\n",nMol);
-    */
-    cudaMalloc((void**)&d_nebrTabPtr, (nMol+1)*sizeof(int));
-    cudaMalloc((void**)&d_nebrTab, nebrTabMax*sizeof(int));
-    cudaMalloc((void**)&d_mol, nMol*sizeof(Mol));
-    cudaMalloc((void**)&d_g, 15*nMol*sizeof(real));
-    cudaMalloc((void**)&d_atomPotential, nMol*sizeof(real));
-    cudaMalloc((void**)&d_indexSum,sizeof(int));
+    printf("h_nMol=%d\n\n",h_nMol);
+    
+    h_atomPotential=(real*)malloc(sizeof(real)*h_nMol);
+    cutilSafeCall(cudaMalloc((void**)&d_nebrTabPtr, (h_nMol+1)*sizeof(int)));
+    cutilSafeCall(cudaMalloc((void**)&d_nebrTab, nebrTabMax*sizeof(int)));
+    cutilSafeCall(cudaMalloc((void**)&d_mol, h_nMol*sizeof(Mol)));
+    cutilSafeCall(cudaMalloc((void**)&d_g, 15*h_nMol*sizeof(real)));
+    cutilSafeCall(cudaMalloc((void**)&d_atomPotential, h_nMol*sizeof(real)));
+    cutilSafeCall(cudaMalloc((void**)&d_indexSum,sizeof(int)));
+    cutilSafeCall(cudaMalloc((void**)&d_region,sizeof(VecR)));
+    cutilSafeCall(cudaMemcpy(d_region, &region, sizeof(VecR), cudaMemcpyHostToDevice));
+    cutilSafeCall(cudaMalloc((void**)&d_accum, h_nMol*sizeof(real)));    
 }
 
-void UpdateGPUNeighbors()
+void UpdateGPUNeighbors(int* nebrTabPtr,int* nebrTab,int nebrTabMax)
 {
-    cudaMemcpy(d_nebrTabPtr, nebrTabPtr, (nMol+1)*sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_nebrTabPtr, nebrTabPtr, (h_nMol+1)*sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_nebrTab, nebrTab, nebrTabMax*sizeof(int), cudaMemcpyHostToDevice);
 }
 
-__global__ void ZeroAccumulators(Mol* inMol,real* inAtomPotential,real* inG,int* inCount,int N)
+__global__ void ZeroAccumulators(Mol* inMol,real* inAtomPotential,int inNumMol,real* accum,int* inCount)
 {
-  int n=8*gridDim.x *gridDim.x * blockIdx.x + 8*gridDim.y*blockIdx.y + threadIdx.x;
-  if(n < N)
+  int n=blockIdx.x;//8*gridDim.x *gridDim.x * blockIdx.x + 8*gridDim.y*blockIdx.y + threadIdx.x;
+  if(n < inNumMol)
   {
-    //atomicAdd(inCount,n);
+    atomicAdd(inCount,n);
     inMol[n].ra.x=0.;
     inMol[n].ra.y=0.;
     inMol[n].ra.z=0.;
     inAtomPotential[n]=0.;
-    inG[n]=0.;
-    /*inG[n+N]=0;
-    inG[n+2*N]=0;
-    inG[n+3*N]=0;
-    inG[n+4*N]=0;
-    inG[n+5*N]=0;
-    inG[n+6*N]=0;
-    inG[n+7*N]=0;
-    inG[n+8*N]=0;
-    inG[n+9*N]=0;
-    inG[n+10*N]=0;
-    inG[n+11*N]=0;
-    inG[n+12*N]=0;
-    inG[n+13*N]=0;
-    inG[n+14*N]=0;*/
+    accum[n]=0.;
+    
   }
 }
 
-__global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTabPtr,int*inNebrTab,VecR* inRegion,real inRCut,int inNMol,int* inCounter)
+__global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTabPtr,int*inNebrTab,VecR* inRegion,real inRCut,int inNMol,int* inCounter,real* accum)
 {
     VecR dr, dr12, dr13, w2, w3;
     real aCon = 7.0496, bCon = 0.60222, cr, er, fcVal,
@@ -198,42 +179,48 @@ __global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTab
     if(CURR<inNMol)
     {
         atomicAdd(inCounter,CURR);
+        accum[CURR]=inRCut;
         rrCut = Sqr (inRCut) - 0.001;
-        //J1 should be CURR    
-        for (m2 = inNebrTabPtr[CURR]; m2 < inNebrTabPtr[CURR + 1]; m2 ++) {
-             j2 = inNebrTab[m2];
-             VSub (dr, inMol[CURR].r, inMol[j2].r);
-             VWrapAll (dr);
-             rr = VLenSq (dr);
-             if (rr < rrCut) {
-                  //calculate if i,j conribution to G1(i)and add it to sum for i
-                  rm = sqrt (rr);
-                  er = exp (1. / (rm - inRCut));
-                  ri = 1. / rm;
-                  ri3 = Cube (ri);
-                  fcVal = aCon * (4. * bCon * Sqr (ri3) +
-                                      (bCon * ri3 * ri - 1.) * ri / Sqr (rm - inRCut)) * er;
-                  VVSAdd (inMol[CURR].ra, fcVal/2., dr);
-                  VVSAdd (inMol[j2].ra, - fcVal/2., dr);
-                  //uSum += aCon * (bCon * ri3 * ri - 1.) * er;
-                  inAtomPotential[CURR]+=aCon * (bCon * ri3 * ri - 1.) * er;
-                  fc=1.0+0.5*cos(3.1419*rm/inRCut);
-                  g[0]+=exp(-eta[0]*(rm-Rs[0])*(rm-Rs[0]))*fc;
-                  g[1]+=exp(-eta[0]*(rm-Rs[5])*(rm-Rs[5]))*fc;
-                  
-                  g[2]+=exp(-eta[1]*(rm-Rs[0])*(rm-Rs[0]))*fc;
-                  g[3]+=exp(-eta[4]*(rm-Rs[1])*(rm-Rs[1]))*fc;
-                  g[4]+=exp(-eta[1]*(rm-Rs[2])*(rm-Rs[2]))*fc;
-                  g[5]+=exp(-eta[1]*(rm-Rs[4])*(rm-Rs[4]))*fc;
-                  g[6]+=exp(-eta[1]*(rm-Rs[5])*(rm-Rs[5]))*fc;
-                  
-                  g[7]+=exp(-eta[2]*(rm-Rs[0])*(rm-Rs[0]))*fc;
-                  g[8]+=exp(-eta[2]*(rm-Rs[3])*(rm-Rs[3]))*fc;
-                  
-             } 
+        for (m2 = inNebrTabPtr[CURR]; m2 < inNebrTabPtr[CURR + 1]; m2 ++)
+        {
+            j2 = inNebrTab[m2];
+            if (CURR<j2)
+            {
+                //atomicMax(inCounter,j2);   
+                VSub (dr, inMol[CURR].r, inMol[j2].r);
+                VWrapAll (dr);
+                rr = VLenSq (dr);
+                if (rr < rrCut) {
+                     //calculate if i,j conribution to G1(i)and add it to sum for i
+                     rm = sqrt (rr);
+                     er = exp (1. / (rm - inRCut));
+                     ri = 1. / rm;
+                     ri3 = Cube (ri);
+                     fcVal = aCon * (4. * bCon * Sqr (ri3) +
+                                         (bCon * ri3 * ri - 1.) * ri / Sqr (rm - inRCut)) * er;
+                     VVSAdd (inMol[CURR].ra, fcVal, dr);
+                     VVSAdd (inMol[j2].ra, - fcVal, dr);
+                     //uSum += aCon * (bCon * ri3 * ri - 1.) * er;
+                     inAtomPotential[CURR]+=aCon * (bCon * ri3 * ri - 1.) * er;
+                     fc=1.0+0.5*cos(3.1419*rm/inRCut);
+                     g[0]+=exp(-eta[0]*(rm-Rs[0])*(rm-Rs[0]))*fc;
+                     g[1]+=exp(-eta[0]*(rm-Rs[5])*(rm-Rs[5]))*fc;
+                     
+                     g[2]+=exp(-eta[1]*(rm-Rs[0])*(rm-Rs[0]))*fc;
+                     g[3]+=exp(-eta[4]*(rm-Rs[1])*(rm-Rs[1]))*fc;
+                     g[4]+=exp(-eta[1]*(rm-Rs[2])*(rm-Rs[2]))*fc;
+                     g[5]+=exp(-eta[1]*(rm-Rs[4])*(rm-Rs[4]))*fc;
+                     g[6]+=exp(-eta[1]*(rm-Rs[5])*(rm-Rs[5]))*fc;
+                     
+                     g[7]+=exp(-eta[2]*(rm-Rs[0])*(rm-Rs[0]))*fc;
+                     g[8]+=exp(-eta[2]*(rm-Rs[3])*(rm-Rs[3]))*fc;
+                     
+                }
+            }
         }
 	
         //3 body terms
+        /*
         for (m2 = inNebrTabPtr[CURR]; m2 < inNebrTabPtr[CURR + 1] - 1; m2 ++)
         {
            j2 = inNebrTab[m2];
@@ -284,7 +271,7 @@ __global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTab
                      }
                 }
            }
-        }
+        }*/
         
     }
     
@@ -301,59 +288,58 @@ __device__ void zeroArray(double* theArray)
 
 
 // Host code
-
-void doForceIterartion()
+void doForceIterartion(double inRCut,Mol* inMol,double &outUSum)
 {
     //real g1Sum=0;
-    //int n;   
-    dim3 theSize(initUcell.x,initUcell.y);
-    //printf("nMol=%d\n",nMol);
+    //int n;
+    int counter=0;
+    real localUSum=outUSum;
+    dim3 theSize(8000,1,1);
+    //printf("h_nMol=%d\n",h_nMol);
     /*g1Sum=0;
-    for(n=0;n<nMol;n++)
+    for(n=0;n<h_nMol;n++)
     {
         g1Sum+=mol[n].ra.x+mol[n].ra.y+mol[n].ra.z;
     }*/
     //printf("mol[n].ra sum just before zero=%6.4f\n",g1Sum);
     
     //clear out accumulators
-    int counter=0;
-    cudaMemcpy(d_indexSum,&counter, sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_mol,mol, nMol*sizeof(Mol), cudaMemcpyHostToDevice);
-    ZeroAccumulators<<<theSize,8*10>>>(d_mol,d_atomPotential,d_g,d_indexSum,nMol);
-    cudaThreadSynchronize();
-    
-    //cudaMemcpy(g1, d_g, nMol*sizeof(real), cudaMemcpyDeviceToHost);
- 
-    //cudaMemcpy(&counter,d_indexSum, sizeof(int), cudaMemcpyDeviceToHost);   
-    //printf("zeroaccum counter=%d\n",counter);
-    /*
-    DO_MOL
-    {
-        g1Sum+=g1[n];
-    }
-    //printf("g1 sum after zero=%6.4f\n",g1Sum/nMol);
-    g1Sum=0;
-    for(n=0;n<nMol;n++)
-    {
-        g1Sum+=mol[n].ra.x;
-    }*/
-    //printf("mol[n].ra.x sum after zero=%6.4f\n",g1Sum);
-    //calc forces
-    ComputeTraining();
-    /*ComputeForcesGPU<<<nMol,1>>>(d_mol,d_atomPotential, d_nebrTabPtr,d_nebrTab,d_region,rCut,nMol,d_indexSum);
-    cudaMemcpy(mol, d_mol, nMol*sizeof(Mol), cudaMemcpyDeviceToHost);
-    cudaMemcpy(atomPotential, d_atomPotential, nMol*sizeof(real), cudaMemcpyDeviceToHost);
+    real sum=0;
+    int n;
+    real* theAccum=(real*)malloc(h_nMol*sizeof(real));
+    cutilSafeCall(cudaMemcpy(d_indexSum,&counter, sizeof(int), cudaMemcpyHostToDevice));
+    cutilSafeCall(cudaMemcpy(d_mol,inMol,h_nMol*sizeof(Mol), cudaMemcpyHostToDevice));
+    int blocks=8000;
+    int threads=1;
+    ZeroAccumulators<<<blocks,threads>>>(d_mol,d_atomPotential,8000,d_accum,d_indexSum);
+    //cutilSafeCall(cudaMemcpy(theAccum, d_accum, h_nMol*sizeof(real), cudaMemcpyDeviceToHost));
+    //cutilSafeCall(cudaMemcpy(h_atomPotential, d_atomPotential, h_nMol*sizeof(real), cudaMemcpyDeviceToHost));
+    //cudaMemcpy(&counter, d_indexSum, sizeof(int), cudaMemcpyDeviceToHost);
+    //printf("sum of iterators=%d\n",counter);
+    //for(n=0;n<h_nMol;n++) sum+=theAccum[n];
+    //printf("Accum after zero=%f with h_nMol=%d\n",sum/h_nMol,h_nMol);
+    //localUSum=0;
+    //for(n=0;n<h_nMol;n++) localUSum+=h_atomPotential[n];
+    //printf("localUSum after zero=%f\n",localUSum/h_nMol);
+    //outUSum=localUSum/h_nMol;
+    //printf("uSum after zero=%f\n",outUSum);
+    //cudaThreadSynchronize();
+    cutilSafeCall(cudaMemcpy(d_indexSum,&counter, sizeof(int), cudaMemcpyHostToDevice));
+    ComputeForcesGPU<<<blocks,threads>>>(d_mol,d_atomPotential, d_nebrTabPtr,d_nebrTab,d_region,inRCut,h_nMol,d_indexSum,d_accum);
+    cutilSafeCall(cudaMemcpy(inMol, d_mol, h_nMol*sizeof(Mol), cudaMemcpyDeviceToHost));
+    cutilSafeCall(cudaMemcpy(h_atomPotential, d_atomPotential, h_nMol*sizeof(real), cudaMemcpyDeviceToHost));
+    cutilSafeCall(cudaMemcpy(theAccum, d_accum, h_nMol*sizeof(real), cudaMemcpyDeviceToHost));
     cudaMemcpy(&counter, d_indexSum, sizeof(int), cudaMemcpyDeviceToHost);
     printf("sum of iterations=%d\n",counter);
-
-    int n;
-    uSum=0;
-    DO_MOL uSum+=atomPotential[n];
-    uSum/=2.0;
-    */
-    printf("uSum=%f\n",uSum/nMol);
-    
-    //printf("testUSum=%f\n",uSum/nMol);
+    for(n=0;n<h_nMol;n++) sum+=theAccum[n];
+    printf("Accum after zero=%f with h_nMol=%d\n",sum/h_nMol,h_nMol);
+    localUSum=0;
+    for(n=0;n<h_nMol;n++) localUSum+=h_atomPotential[n];
+    printf("localUSum after zero=%f\n",localUSum/h_nMol);
+    outUSum=localUSum/h_nMol;
+    printf("uSum after zero=%f\n",outUSum);
+  
+    free(theAccum);
 
 }
 

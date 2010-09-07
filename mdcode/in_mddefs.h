@@ -6,7 +6,7 @@
 #include <signal.h>
 #include <sys/time.h>
 
-typedef float real;
+typedef double real;
 
 #define CHAR_MINUS  '-'
 #define CHAR_ZERO   '0'
