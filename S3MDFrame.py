@@ -77,15 +77,16 @@ flag, and the actual resizing of the figure is triggered by an Idle event."""
     def draw(self):
        
         if self.x != None and self.y !=None:
-            self.figure.subplots_adjust(left=0.125)
+            self.figure.subplots_adjust(left=0.145)
             self.axes.plot(self.x[0][1:],self.y[0][1:], 'rv',linestyle='--',linewidth=4.0)
             self.axes.plot(self.x[1][1:],self.y[1][1:], 'bo',linestyle=':',linewidth=2.0)
             self.axes.plot(self.x[2][1:],self.y[2][1:], 'g.',linestyle='-',linewidth=1.0)
-            self.axes.legend(('Base','ANN','ANN-GPU'),loc='lower right',fancybox=True)
-            self.axes.set_xlabel('Timestep')
-            self.axes.set_ylabel=('Pressure')
-            self.axes.set_xlim((0,3000))
+            self.axes.legend(('PWScf','ANN','ANN-GPU'),loc='lower right',fancybox=True)
             self.axes.set_ylim((0,-2.0))
+            self.axes.set_xlabel('Timestep')
+            self.axes.set_ylabel=('Mean Potential Energy')
+            #self.axes.set_xlim((0,3000))
+            
             #ticks=[0.98*self.y[2].max(),self.y[2].max(),1.02*self.y[2].max()]
             #self.axes.set_ylim((ticks[0],ticks[2]))
             #strLabels=['%.3f'%(0.98*ticks[0]),
@@ -147,11 +148,13 @@ class BarPanel (wx.Panel):
                                      float( pixels[1] )/self.figure.get_dpi() )
     def setData(self,inValList):
         tempVals=inValList
-        if tempVals[0]==0:
-            tempVals[0]=1
-        
+        #if tempVals[0]==0:
+        #    tempVals[0]=1
+        tempVals[0]=0.00001
         val1=tempVals[1]/float(tempVals[0])
+        if(val1<0.1):val1=0.1
         val2=tempVals[2]/float(tempVals[0])
+        if(val2<0.1):val2=0.2
         del self.speedup1[0]
         self.speedup1.append(val1)   
         del self.speedup2[0]
@@ -160,17 +163,17 @@ class BarPanel (wx.Panel):
     def draw(self):
         self.axes.clear()
         self.figure.subplots_adjust(top=0.83)
-        self.axes.bar([1,2,3],[1.0,mean(self.speedup1),mean(self.speedup2)],color=['r','b','g'])
+        self.axes.bar([1,2,3],[0.01,mean(self.speedup1),mean(self.speedup2)],color=['r','b','g'])
         self.axes.set_xticks([])
         self.axes.set_yticks([])
         self.axes.set_xticklabels([])
         self.axes.set_yticklabels([])
-        self.axes.set_title('Speedup Relative to Base')
-        self.axes.text(1.3,0.5,'1x')
-        speedStr1 = '%.1fx'%mean(self.speedup1)
-        speedStr2 = '%.1fx'%mean(self.speedup2)
-        self.axes.text(2.15,mean(self.speedup1)/2.0,speedStr1)
-        self.axes.text(3.15,mean(self.speedup2)/2.0,speedStr2)
+        self.axes.set_title('Speed Relative to GPU-ANN')
+        self.axes.text(0.001,0.5,r'$10^-5x$')
+        speedStr1 = '%4.3ex'%mean(self.speedup1)
+        speedStr2 = '%4.3ex'%mean(self.speedup2)
+        self.axes.text(2.05,mean(self.speedup1)*1.1,speedStr1)
+        self.axes.text(3.05,mean(self.speedup2)/2.0,speedStr2)
         self.canvas.draw()
    
 from threading import Thread
@@ -201,7 +204,7 @@ class S3MDFrame(wx.Frame):
     def __init__(self, parent, title):
         self.counter=0
         wx.Frame.__init__(self, parent, title=title, size=(450, 700))
-        self.control = wx.TextCtrl(self, style = wx.TE_MULTILINE,size=(450,65))
+        #self.control = wx.TextCtrl(self, style = wx.TE_MULTILINE,size=(450,65))
         
         self.simulationWorkers=None
         self.checkUpdates=False
@@ -259,7 +262,7 @@ class S3MDFrame(wx.Frame):
         panelSizer.Add(self.windTunnelPanel, 5, wx.EXPAND)
         
         pieSizer = wx.BoxSizer(wx.HORIZONTAL)
-        pieSizer.Add(self.control, 1, wx.EXPAND)
+        #pieSizer.Add(self.control, 1, wx.EXPAND)
         pieSizer.Add(self.barPanel, 1, wx.EXPAND)
         
         panelSizer.Add(pieSizer, 3, wx.EXPAND)
@@ -328,7 +331,7 @@ class S3MDFrame(wx.Frame):
         ###
         
         self.controlPanel.SetBackgroundColour("GRAY")
-        self.control.SetBackgroundColour("GRAY")
+        #self.control.SetBackgroundColour("GRAY")
         self.Show(True)
     
     def readRDF(self,fileName):
@@ -357,7 +360,7 @@ class S3MDFrame(wx.Frame):
                 in1=open('testDataorigMD.txt','r')
                 data1=in1.readlines()
                 in1.close()
-                if len(data1)>0:
+                if 0:#len(data1)>0:
                     A=array( [ [float(line.split()[0]),float(line.split()[3])+float(line.split()[5])] for line in data1])
                 else:
                     A=zeros((1,2))
@@ -403,7 +406,7 @@ class S3MDFrame(wx.Frame):
             self.windTunnelPanel.points = data
             self.windTunnelPanel.Refresh(False)
         dlg.Destroy()                
-        self.control.AppendText("Opened \n")
+        self.SetStatusText("Opened \n")
 
 
     def OnSave(self, e):       
@@ -418,7 +421,7 @@ class S3MDFrame(wx.Frame):
                 fp.write(theString + "\n")           
             fp.close()
         dlg.Destroy()
-        self.control.AppendText("Saved \n")
+        self.SetStatusText("Saved \n")
  
      
     def OnClose(self, e):
@@ -427,7 +430,7 @@ class S3MDFrame(wx.Frame):
      
     ###defining events on the control panel
     def EvtComboBox(self, e):
-        self.control.AppendText("EventComboBox Chosen: %s\n" %e.GetString())
+        self.SetStatusText("EventComboBox Chosen: %s\n" %e.GetString())
         chosen = e.GetString()
         print chosen
         theImage=wx.Image(chosen)
@@ -440,7 +443,7 @@ class S3MDFrame(wx.Frame):
     
         
     def OnClickPlay(self, e):
-        self.control.AppendText("Clicked on Run button\n")
+        self.SetStatusText("Clicked on Run button\n")
         self.controlPanel.SetBackgroundColour("YELLOW")
         self.checkUpdates=True
         #run simulation in seperate thread
@@ -457,28 +460,29 @@ class S3MDFrame(wx.Frame):
         self.simulationWorkers[2].start()
             
     def OnClickStop(self, e):
-        self.control.AppendText("Clicked on Stop button\n")
-        self.controlPanel.SetBackgroundColour("GREEN")
-        self.checkUpdates=False
-        if self.simulationWorkers!=None:
-            for worker in self.simulationWorkers:
-                worker.abort()
-                
-    def OnClickIdle(self, e):
-        self.control.AppendText("Clicked on Idle button\n")
+        self.SetStatusText("Clicked on Stop button\n")
         self.controlPanel.SetBackgroundColour("GRAY")
         self.checkUpdates=False
         if self.simulationWorkers!=None:
             for worker in self.simulationWorkers:
                 worker.abort()
                 
+    def OnClickIdle(self, e):
+        self.SetStatusText("Clicked on Idle button\n")
+        self.controlPanel.SetBackgroundColour("GREEN")
+        self.checkUpdates=False
+        if self.simulationWorkers!=None:
+            for worker in self.simulationWorkers:
+                worker.abort()
+                
     def OnSlideVelocity(self, e):
-        self.control.AppendText("Velocity Slider was moved %d\n" %e.GetInt())
+        self.SetStatusText("Velocity Slider was moved %d\n" %e.GetInt())
         self.Velocity = e.GetInt()
     
         
     def OnSlideTemp(self, e):
-        self.control.AppendText("Temperature Slider was moved %d\n" %e.GetInt())
+        
+        self.SetStatusText("Temperature Slider was moved %d\n" %e.GetInt())
         self.Temperature = e.GetInt()
     
 

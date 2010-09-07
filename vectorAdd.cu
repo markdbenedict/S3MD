@@ -843,7 +843,8 @@ __global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTab
        gCon = 1.2, lCon = 21., p12, p13, ri, ri3, rm,
        rm12, rm13, rm23,rr, rr12, rr13, rrCut;
     int j2, j3, m2, m3;
-    int CURR=blockIdx.x;
+    //int CURR=blockDim.x*blockDim.y*blockIdx.x+blockIdx.y;
+    int CURR=blockDim.x*blockIdx.x+threadIdx.y;
     real fc=0,theta=0;
     real eta[5] = {0.01,0.1,0.5,1.0,10.0};
     real Rs[6] = {1.0,2.0,3.0,4.0,5.0,6.0};
@@ -918,14 +919,6 @@ __global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTab
                      g[0]+=exp(-eta[0]*(rm-Rs[0])*(rm-Rs[0]))*fc;
                      g[1]+=exp(-eta[0]*(rm-Rs[5])*(rm-Rs[5]))*fc;
                      
-                     g[2]+=exp(-eta[1]*(rm-Rs[0])*(rm-Rs[0]))*fc;
-                     g[3]+=exp(-eta[4]*(rm-Rs[1])*(rm-Rs[1]))*fc;
-                     g[4]+=exp(-eta[1]*(rm-Rs[2])*(rm-Rs[2]))*fc;
-                     g[5]+=exp(-eta[1]*(rm-Rs[4])*(rm-Rs[4]))*fc;
-                     g[6]+=exp(-eta[1]*(rm-Rs[5])*(rm-Rs[5]))*fc;
-                     
-                     g[7]+=exp(-eta[2]*(rm-Rs[0])*(rm-Rs[0]))*fc;
-                     g[8]+=exp(-eta[2]*(rm-Rs[3])*(rm-Rs[3]))*fc;
                      
                 }
             }
@@ -994,16 +987,6 @@ __global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTab
                           g[9]+=pow((real)2,1-zeta[0])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[0]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
                           g[10]+=pow((real)2,1-zeta[0])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[1]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
                           g[11]+=pow((real)2,1-zeta[0])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-                          g[12]+=pow((real)2,1-zeta[0])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[3]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-                          g[13]+=pow((real)2,1-zeta[1])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[1]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-                          g[14]+=pow((real)2,1-zeta[2])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[2]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-                          
-                          g[9]+=pow((real)2,1-zeta[0])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[0]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-                          g[10]+=pow((real)2,1-zeta[0])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[1]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-                          g[11]+=pow((real)2,1-zeta[0])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-                          g[12]+=pow((real)2,1-zeta[0])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[0]) * exp(-eta[3]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-                          g[13]+=pow((real)2,1-zeta[1])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[1]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
-                          g[14]+=pow((real)2,1-zeta[2])*pow((real)(1.0+lambda[0]*cos(theta)),zeta[2]) * exp(-eta[2]*(rm12*rm12+rm13*rm13+rm23*rm23)) * fc;
                           
                      }
                 }
@@ -1026,7 +1009,7 @@ void doForceIterartion(double inRCut,Mol* inMol,double &outUSum)
     int counter=0;
     int n;
     real localUSum=outUSum;
-    dim3 theSize(8000,1,1);
+    dim3 theSize(250,1,1);
     //printf("x=%f,y=%f,z=%f\n",inMol[100].r.x,inMol[100].r.y,inMol[100].r.z);
     double sum=0;
     int j=0;
@@ -1082,7 +1065,7 @@ void doForceIterartion(double inRCut,Mol* inMol,double &outUSum)
     //outUSum=localUSum/h_nMol;
     //printf("uSum after zero=%f\n",outUSum);
     cudaThreadSynchronize();    
-    
+    threads=32;
     counter=0;
     //cudaMemcpy(d_indexSum,&counter, sizeof(int), cudaMemcpyHostToDevice);
     ComputeForcesGPU<<<blocks,threads>>>(d_mol,d_atomPotential, d_nebrTabPtr,d_nebrTab,d_region,inRCut,h_nMol);//d_indexSum,d_accum);
