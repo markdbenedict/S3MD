@@ -61,7 +61,7 @@ void SetupTraining();
 void ComputeTraining();
 void WriteOutTrainingData();
 void doForceIterartion(double inRCut,Mol* mol,double& outUSum);
-void AllocGPUMemory(int nebrTabMax, int nebrTabLen,int nMol,VecR region,VecI inUcell);
+void AllocGPUMemory(int nebrTabMax, int nebrTabLen,int inNMol,double rx,double ry, double rz, int ua, int ub, int uc);
 void UpdateGPUNeighbors(int* nebrTabPtr,int* nebrTab,int nebrTabMax);
 
 int main (int argc, char **argv)
@@ -78,7 +78,8 @@ int main (int argc, char **argv)
   SetParams ();
   SetupJob ();
   SetupTraining();
-  AllocGPUMemory(nebrTabMax, nebrTabLen, nMol,region,initUcell);  
+  printf("region just before Alloc is %f,%f,%f\n",region.x,region.y,region.z);
+  AllocGPUMemory(nebrTabMax, nebrTabLen, nMol,region.x,region.y,region.z,initUcell.x,initUcell.x,initUcell.x);  
   
   //printf("numAtoms=%d",nMol);
   moreCycles = 1;
@@ -91,6 +92,7 @@ int main (int argc, char **argv)
 
 void SingleStep ()
 {
+     printf("region in .C is %f,%f,%f\n",region.x,region.y,region.z);
   ++ stepCount;
   timeNow = stepCount * deltaT;
   if (nebrNow) {
@@ -99,10 +101,9 @@ void SingleStep ()
     BuildNebrList ();
   }
   PredictorStep ();
-  //ComputeForces();
   //ComputeTraining();
   doForceIterartion(rCut,mol,uSum);
-
+  //ComputeForces();
   printf("atomPotential in .C after zero=%f\n",uSum/nMol);
   
   ApplyThermostat ();
@@ -136,6 +137,8 @@ void SetupJob ()
 void SetParams ()
 {
   VSCopy (region, 1. / pow (density / 8., 1./3.), initUcell);
+     printf("region initialized to %f,%f,%f\n",region.x,region.y,region.z);
+      printf("initUcell is %d,%d,%d\n",initUcell.x,initUcell.y,initUcell.z);
   nMol = 8 * VProd (initUcell);
   velMag = sqrt (NDIM * (1. - 1. / nMol) * temperature);
   VSCopy (cells, 1. / (rCut + rNebrShell), region);
