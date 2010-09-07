@@ -197,7 +197,7 @@ class SimulationWorker(Thread):
         if hasattr(self,'p'):
             self.p.kill()
 
-class WindTunnelFrame(wx.Frame):
+class S3MDFrame(wx.Frame):
     def __init__(self, parent, title):
         self.counter=0
         wx.Frame.__init__(self, parent, title=title, size=(450, 700))
@@ -488,5 +488,5 @@ class WindTunnelFrame(wx.Frame):
 
    
 app = wx.App(False)
-frame = WindTunnelFrame(None, "Wind Tunnel Frame")
+frame = S3MDFrame(None, "Tech Demo")
 app.MainLoop()
