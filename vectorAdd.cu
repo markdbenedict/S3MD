@@ -102,8 +102,8 @@ void SingleStep ()
   }
   PredictorStep ();
   //ComputeTraining();
-  //doForceIterartion(rCut,mol,uSum);
-  ComputeForces();
+  doForceIterartion(rCut,mol,uSum);
+  //ComputeForces();
   //printf("atomPotential in .C after zero=%f\n",uSum);
   
   ApplyThermostat ();
@@ -786,7 +786,8 @@ void AllocGPUMemory(int nebrTabMax, int nebrTabLen,int inNMol,double rx,double r
     h_Region.x=rx;
     h_Region.y=rx;
     h_Region.z=rx;
-    /*cudaDeviceProp prop;
+    
+    cudaDeviceProp prop;
     int Dev;
     cudaGetDevice(&Dev);
     cudaGetDeviceProperties(&prop,Dev);
@@ -799,7 +800,8 @@ void AllocGPUMemory(int nebrTabMax, int nebrTabLen,int inNMol,double rx,double r
     
     printf("region is %f,%f,%f\n",rx,ry,rz);
     printf("h_Region is %f,%f,%f\n",h_Region.x,h_Region.y,h_Region.z);
-    printf("unitCell is %d,%d,%d\n",h_UCell.x,h_UCell.y,h_UCell.z);*/
+    printf("unitCell is %d,%d,%d\n",h_UCell.x,h_UCell.y,h_UCell.z);
+    
     h_atomPotential=(real*)malloc(sizeof(real)*h_nMol);
     cudaMalloc((void**)&d_nebrTabPtr, (h_nMol+1)*sizeof(int));
     cudaMalloc((void**)&d_nebrTab, nebrTabMax*sizeof(int));
@@ -844,7 +846,7 @@ __global__ void ComputeForcesGPU(Mol *inMol,real* inAtomPotential,int* inNebrTab
        rm12, rm13, rm23,rr, rr12, rr13, rrCut;
     int j2, j3, m2, m3;
     //int CURR=blockDim.x*blockDim.y*blockIdx.x+blockIdx.y;
-    int CURR=blockDim.x*blockIdx.x+threadIdx.y;
+    int CURR=blockIdx.x;
     real fc=0,theta=0;
     real eta[5] = {0.01,0.1,0.5,1.0,10.0};
     real Rs[6] = {1.0,2.0,3.0,4.0,5.0,6.0};
@@ -1065,7 +1067,7 @@ void doForceIterartion(double inRCut,Mol* inMol,double &outUSum)
     //outUSum=localUSum/h_nMol;
     //printf("uSum after zero=%f\n",outUSum);
     cudaThreadSynchronize();    
-    threads=32;
+    threads=1;
     counter=0;
     //cudaMemcpy(d_indexSum,&counter, sizeof(int), cudaMemcpyHostToDevice);
     ComputeForcesGPU<<<blocks,threads>>>(d_mol,d_atomPotential, d_nebrTabPtr,d_nebrTab,d_region,inRCut,h_nMol);//d_indexSum,d_accum);
@@ -1105,7 +1107,7 @@ void doForceIterartion(double inRCut,Mol* inMol,double &outUSum)
     //printf("Accum after forces=%f\n",sum/999999);
     localUSum=0;
     for(n=0;n<h_nMol;n++) localUSum+=h_atomPotential[n];
-    //printf("localUSum after forces=%f\n",localUSum/h_nMol);
+    printf("localUSum after forces=%f\n",localUSum/h_nMol);
     outUSum=localUSum;///h_nMol;
     //printf("uSum after zero=%f\n",outUSum);
   
